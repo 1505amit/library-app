@@ -1,0 +1,21 @@
+# Environment variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.installed.cfg
+*.egg
+
+
+# IDE
+.vscode/
+
+# Testing
+.pytest_cache/
+
+# Pipenv
+Pipfile.lock
