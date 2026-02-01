@@ -14,6 +14,9 @@ RUN pipenv install --system
 # Copy app source
 COPY ./app ./app
 COPY ./alembic ./alembic
-COPY alembic.ini ./
+COPY alembic.ini entrypoint.sh ./
 
-CMD ["sh", "-c", "pipenv run alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Set execute permissions
+RUN chmod +x entrypoint.sh
+
+CMD ["./entrypoint.sh"]
