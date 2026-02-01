@@ -8,12 +8,16 @@ RUN pip install pipenv
 # Copy Pipfile and Pipfile.lock first for caching
 COPY Pipfile* ./
 
-# Install dependencies system-wide
-RUN pipenv install --system
+# Install dependencies system-wide (including dev dependencies for testing)
+RUN pipenv install --system --deploy --dev
 
 # Copy app source
 COPY ./app ./app
 COPY ./alembic ./alembic
-COPY alembic.ini ./
+COPY ./tests ./tests
+COPY alembic.ini entrypoint.sh ./
 
-CMD ["sh", "-c", "pipenv run alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Set execute permissions
+RUN chmod +x entrypoint.sh
+
+CMD ["./entrypoint.sh"]
