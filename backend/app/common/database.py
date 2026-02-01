@@ -7,11 +7,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 Base = declarative_base()
-try:
-    engine = create_engine(settings.database_url, echo=settings.debug)
-except Exception as e:
-    logger.error(f"Failed to create database engine: {str(e)}")
-    raise
+
+engine = create_engine(settings.database_url, echo=settings.debug)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
