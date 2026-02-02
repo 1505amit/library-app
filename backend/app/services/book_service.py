@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.repositories.book_repository import BookRepository
 from sqlalchemy.exc import SQLAlchemyError
+from app.schemas.book import BookBase
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,4 +21,14 @@ class BookService:
             raise ValueError("Failed to retrieve books from database")
         except Exception as e:
             logger.error(f"Unexpected error in get_all_books: {str(e)}")
+            raise
+
+    def create_book(self, book: BookBase):
+        try:
+            return self.books_repository.create_book(book)
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in create_book: {str(e)}")
+            raise ValueError("Failed to create book in database")
+        except Exception as e:
+            logger.error(f"Unexpected error in create_book: {str(e)}")
             raise
