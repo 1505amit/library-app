@@ -165,3 +165,68 @@ def test_add_book_database_error(client):
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json()["detail"] == "Failed to create book"
+
+
+# Test update_book endpoint
+def test_update_book_success(client):
+    """Test updating a book successfully."""
+    book_id = 1
+    updated_book_data = {"title": "Updated Title", "author": "Updated Author", "published_year": 2024, "available": True}
+    updated_book = BookResponse(id=1, **updated_book_data)
+
+    mock_service = MagicMock(spec=BookService)
+    mock_service.update_book.return_value = updated_book
+    app.dependency_overrides[get_book_service] = lambda: mock_service
+
+    response = client.put(f"/api/v1/books/{book_id}", json=updated_book_data)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["title"] == "Updated Title"
+    assert response.json()["author"] == "Updated Author"
+    assert response.json()["id"] == 1
+    mock_service.update_book.assert_called_once()
+
+
+def test_update_book_not_found(client):
+    """Test updating a book that does not exist."""
+    book_id = 999
+    updated_book_data = {"title": "Updated Title", "author": "Author", "published_year": 2024, "available": True}
+
+    mock_service = MagicMock(spec=BookService)
+    mock_service.update_book.side_effect = ValueError(f"Book with id {book_id} not found")
+    app.dependency_overrides[get_book_service] = lambda: mock_service
+
+    response = client.put(f"/api/v1/books/{book_id}", json=updated_book_data)
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "not found" in response.json()["detail"]
+
+
+def test_update_book_validation_error(client):
+    """Test updating a book with validation error from service."""
+    book_id = 1
+    updated_book_data = {"title": "", "author": "Author", "published_year": 2024, "available": True}
+
+    mock_service = MagicMock(spec=BookService)
+    mock_service.update_book.side_effect = ValueError("Title cannot be empty")
+    app.dependency_overrides[get_book_service] = lambda: mock_service
+
+    response = client.put(f"/api/v1/books/{book_id}", json=updated_book_data)
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Title cannot be empty" in response.json()["detail"]
+
+
+def test_update_book_database_error(client):
+    """Test updating a book when database error occurs."""
+    book_id = 1
+    updated_book_data = {"title": "Updated Title", "author": "Author", "published_year": 2024, "available": True}
+
+    mock_service = MagicMock(spec=BookService)
+    mock_service.update_book.side_effect = Exception("Database error occurred")
+    app.dependency_overrides[get_book_service] = lambda: mock_service
+
+    response = client.put(f"/api/v1/books/{book_id}", json=updated_book_data)
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"] == "Failed to update book"

@@ -32,3 +32,15 @@ class BookService:
         except Exception as e:
             logger.error(f"Unexpected error in create_book: {str(e)}")
             raise
+
+    def update_book(self, book_id: int, book: BookBase):
+        try:
+            return self.books_repository.update_book(book_id, book)
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in update_book: {str(e)}")
+            raise ValueError("Failed to update book in database")
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in update_book: {str(e)}")
+            raise
