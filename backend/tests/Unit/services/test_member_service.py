@@ -124,3 +124,84 @@ def test_create_member_unexpected_error(mock_db, member_base):
 
         with pytest.raises(RuntimeError):
             service.create_member(member_base)
+
+# Test update_member method
+
+
+def test_update_member_success(mock_db, member_base, mock_repo_member):
+    """Test successful member update."""
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+
+        updated_member = mock_repo_member
+        updated_member.name = "Jane Doe"
+        mock_repo.update_member.return_value = updated_member
+
+        service = MemberService(mock_db)
+        result = service.update_member(1, member_base)
+
+        mock_repo.update_member.assert_called_once_with(1, member_base)
+        assert result.id == 1
+        assert result.name == "Jane Doe"
+
+
+def test_update_member_not_found(mock_db, member_base):
+    """Test update_member when member not found."""
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+        mock_repo.update_member.side_effect = ValueError(
+            "Member with id 999 not found")
+
+        service = MemberService(mock_db)
+
+        with pytest.raises(ValueError) as exc_info:
+            service.update_member(999, member_base)
+
+        assert "not found" in str(exc_info.value)
+
+
+def test_update_member_duplicate_email(mock_db, member_base):
+    """Test update_member when duplicate email error occurs."""
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+        mock_repo.update_member.side_effect = ValueError(
+            "Email john@example.com already exists")
+
+        service = MemberService(mock_db)
+
+        with pytest.raises(ValueError) as exc_info:
+            service.update_member(1, member_base)
+
+        assert "already exists" in str(exc_info.value)
+
+
+def test_update_member_sqlalchemy_error(mock_db, member_base):
+    """Test update_member when SQLAlchemyError occurs."""
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+        mock_repo.update_member.side_effect = SQLAlchemyError(
+            "Connection lost")
+
+        service = MemberService(mock_db)
+
+        with pytest.raises(ValueError) as exc_info:
+            service.update_member(1, member_base)
+
+        assert "Failed to update member" in str(exc_info.value)
+
+
+def test_update_member_unexpected_error(mock_db, member_base):
+    """Test update_member when unexpected error occurs."""
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+        mock_repo.update_member.side_effect = RuntimeError("Unexpected error")
+
+        service = MemberService(mock_db)
+
+        with pytest.raises(RuntimeError):
+            service.update_member(1, member_base)

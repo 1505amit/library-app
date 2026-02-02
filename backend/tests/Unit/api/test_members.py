@@ -169,3 +169,88 @@ def test_add_member_empty_email(client):
     response = client.post("/api/v1/members/", json=invalid_member)
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+# Test update_member endpoint
+
+
+def test_update_member_success(client, member_base, member_response):
+    """Test update_member updates a member successfully."""
+    updated_member = MemberResponse(
+        id=1, name="Jane Smith", email="jane@example.com", phone="9876543210", active=True
+    )
+    mock_service = MagicMock(spec=MemberService)
+    mock_service.update_member.return_value = updated_member
+    app.dependency_overrides[get_member_service] = lambda: mock_service
+
+    update_data = MemberBase(
+        name="Jane Smith", email="jane@example.com", phone="9876543210")
+    response = client.put("/api/v1/members/1", json=update_data.model_dump())
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["id"] == 1
+    assert data["name"] == "Jane Smith"
+    assert data["email"] == "jane@example.com"
+    assert data["phone"] == "9876543210"
+    mock_service.update_member.assert_called_once_with(1, update_data)
+
+
+def test_update_member_not_found(client):
+    """Test update_member fails when member not found."""
+    mock_service = MagicMock(spec=MemberService)
+    mock_service.update_member.side_effect = ValueError(
+        "Member with id 999 not found")
+    app.dependency_overrides[get_member_service] = lambda: mock_service
+
+    update_data = {"name": "Updated Name", "email": "updated@example.com"}
+    response = client.put("/api/v1/members/999", json=update_data)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert "not found" in response.json()["detail"]
+
+
+def test_update_member_duplicate_email(client):
+    """Test update_member fails with duplicate email."""
+    mock_service = MagicMock(spec=MemberService)
+    mock_service.update_member.side_effect = ValueError(
+        "Email john@example.com already exists")
+    app.dependency_overrides[get_member_service] = lambda: mock_service
+
+    update_data = {"name": "John Doe",
+                   "email": "john@example.com", "phone": "1234567890"}
+    response = client.put("/api/v1/members/1", json=update_data)
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "already exists" in response.json()["detail"]
+
+
+def test_update_member_database_error(client):
+    """Test update_member when database error occurs."""
+    mock_service = MagicMock(spec=MemberService)
+    mock_service.update_member.side_effect = Exception(
+        "Database connection failed")
+    app.dependency_overrides[get_member_service] = lambda: mock_service
+
+    update_data = {"name": "John Doe", "email": "john@example.com"}
+    response = client.put("/api/v1/members/1", json=update_data)
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Failed to update member" in response.json()["detail"]
+
+
+def test_update_member_missing_name(client):
+    """Test update_member fails when required name field is missing."""
+    invalid_update = {"email": "john@example.com", "phone": "1234567890"}
+
+    response = client.put("/api/v1/members/1", json=invalid_update)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def test_update_member_missing_email(client):
+    """Test update_member fails when required email field is missing."""
+    invalid_update = {"name": "John Doe", "phone": "1234567890"}
+
+    response = client.put("/api/v1/members/1", json=invalid_update)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY

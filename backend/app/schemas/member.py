@@ -5,11 +5,11 @@ class MemberBase(BaseModel):
     name: str
     email: str
     phone: str | None = None
+    active: bool = True
 
 
 class MemberResponse(MemberBase):
     id: int
-    active: bool
 
     class Config:
         from_attributes = True
