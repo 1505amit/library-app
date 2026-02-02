@@ -1,5 +1,5 @@
 from app.services.book_service import BookService
-from app.schemas.book import BookResponse
+from app.schemas.book import BookResponse, BookBase
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.common.database import get_db
@@ -20,7 +20,7 @@ def get_book_service(db: Session = Depends(get_db)) -> BookService:
 
 
 @router.get("/", response_model=list[BookResponse])
-def list_books(service: BookService = Depends(get_book_service)):
+def get_books(service: BookService = Depends(get_book_service)):
     try:
         return service.get_all_books()
     except ValueError as e:
@@ -34,4 +34,21 @@ def list_books(service: BookService = Depends(get_book_service)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch books"
+        )
+    
+@router.post("/", response_model=BookResponse)
+def add_book(book: BookBase, service: BookService = Depends(get_book_service)):
+    try:
+        return service.create_book(book)
+    except ValueError as e:
+        logger.warning(f"Validation error creating book: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error creating book: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create book"
         )
