@@ -205,3 +205,64 @@ def test_update_member_unexpected_error(mock_db, member_base):
 
         with pytest.raises(RuntimeError):
             service.update_member(1, member_base)
+
+
+# Test get_all_members method
+def test_get_all_members_success(mock_db, mock_repo_member):
+    """Test successful retrieval of all members."""
+    members = [mock_repo_member]
+
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+        mock_repo.get_all_members.return_value = members
+
+        service = MemberService(mock_db)
+        result = service.get_all_members()
+
+        mock_repo.get_all_members.assert_called_once()
+        assert len(result) == 1
+        assert result[0].id == 1
+
+
+def test_get_all_members_empty(mock_db):
+    """Test get_all_members when no members exist."""
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+        mock_repo.get_all_members.return_value = []
+
+        service = MemberService(mock_db)
+        result = service.get_all_members()
+
+        assert result == []
+
+
+def test_get_all_members_sqlalchemy_error(mock_db):
+    """Test get_all_members when SQLAlchemyError occurs."""
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+        mock_repo.get_all_members.side_effect = SQLAlchemyError(
+            "Connection lost")
+
+        service = MemberService(mock_db)
+
+        with pytest.raises(ValueError) as exc_info:
+            service.get_all_members()
+
+        assert "Failed to retrieve members" in str(exc_info.value)
+
+
+def test_get_all_members_unexpected_error(mock_db):
+    """Test get_all_members when unexpected error occurs."""
+    with patch('app.services.member_service.MemberRepository') as mock_repo_class:
+        mock_repo = MagicMock()
+        mock_repo_class.return_value = mock_repo
+        mock_repo.get_all_members.side_effect = RuntimeError(
+            "Unexpected error")
+
+        service = MemberService(mock_db)
+
+        with pytest.raises(RuntimeError):
+            service.get_all_members()

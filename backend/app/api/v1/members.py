@@ -64,3 +64,22 @@ def update_member(member_id: int, member: MemberBase, service: MemberService = D
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update member"
         )
+
+
+@router.get("/", response_model=list[MemberResponse])
+def list_members(service: MemberService = Depends(get_member_service)):
+    try:
+        members = service.get_all_members()
+        return members
+    except ValueError as e:
+        logger.warning(f"Validation error retrieving members: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving members: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve members"
+        )

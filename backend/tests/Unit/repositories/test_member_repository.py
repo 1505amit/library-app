@@ -305,3 +305,75 @@ def test_update_member_unexpected_error(mock_db, member_base, mock_db_member):
         repo.update_member(1, member_base)
 
     mock_db.rollback.assert_called_once()
+
+# Test get_all_members method
+
+
+def test_get_all_members_success(mock_db, mock_db_member):
+    """Test successful retrieval of all members."""
+    mock_db.query = MagicMock()
+    mock_query = MagicMock()
+    mock_db.query.return_value = mock_query
+    mock_query.all.return_value = [mock_db_member]
+
+    repo = MemberRepository(mock_db)
+    result = repo.get_all_members()
+
+    mock_db.query.assert_called_once()
+    assert len(result) == 1
+    assert result[0].id == 1
+    assert result[0].name == "John Doe"
+
+
+def test_get_all_members_empty(mock_db):
+    """Test get_all_members when no members exist."""
+    mock_db.query = MagicMock()
+    mock_query = MagicMock()
+    mock_db.query.return_value = mock_query
+    mock_query.all.return_value = []
+
+    repo = MemberRepository(mock_db)
+    result = repo.get_all_members()
+
+    assert result == []
+    mock_db.query.assert_called_once()
+
+
+def test_get_all_members_multiple_members(mock_db):
+    """Test get_all_members with multiple members."""
+    member1 = Member(id=1, name="John Doe",
+                     email="john@example.com", phone="1234567890", active=True)
+    member2 = Member(id=2, name="Jane Doe",
+                     email="jane@example.com", phone=None, active=True)
+
+    mock_db.query = MagicMock()
+    mock_query = MagicMock()
+    mock_db.query.return_value = mock_query
+    mock_query.all.return_value = [member1, member2]
+
+    repo = MemberRepository(mock_db)
+    result = repo.get_all_members()
+
+    assert len(result) == 2
+    assert result[0].name == "John Doe"
+    assert result[1].name == "Jane Doe"
+
+
+def test_get_all_members_sqlalchemy_error(mock_db):
+    """Test get_all_members when SQLAlchemyError occurs."""
+    mock_db.query = MagicMock(side_effect=SQLAlchemyError("Database error"))
+
+    repo = MemberRepository(mock_db)
+
+    with pytest.raises(SQLAlchemyError):
+        repo.get_all_members()
+
+
+def test_get_all_members_unexpected_error(mock_db):
+    """Test get_all_members when unexpected error occurs."""
+    mock_db.query = MagicMock(side_effect=RuntimeError("Unexpected error"))
+
+    repo = MemberRepository(mock_db)
+
+    with pytest.raises(RuntimeError):
+        repo.get_all_members()

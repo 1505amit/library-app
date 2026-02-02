@@ -70,3 +70,14 @@ class MemberRepository:
             self.db.rollback()
             logger.error(f"Unexpected error in update_member: {str(e)}")
             raise
+
+    def get_all_members(self):
+        try:
+            members = self.db.query(Member).all()
+            return members
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in get_all_members: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in get_all_members: {str(e)}")
+            raise

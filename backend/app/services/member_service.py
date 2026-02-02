@@ -37,3 +37,13 @@ class MemberService:
         except Exception as e:
             logger.error(f"Unexpected error in update_member: {str(e)}")
             raise
+
+    def get_all_members(self):
+        try:
+            return self.member_repository.get_all_members()
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in get_all_members: {str(e)}")
+            raise ValueError("Failed to retrieve members from database")
+        except Exception as e:
+            logger.error(f"Unexpected error in get_all_members: {str(e)}")
+            raise
