@@ -130,3 +130,122 @@ def test_create_book_unexpected_error(repository, mock_db):
             repository.create_book(new_book)
 
     mock_db.rollback.assert_called_once()
+
+
+def test_get_book_by_id_success(repository, mock_db):
+    """Test get_book_by_id successfully retrieves a book."""
+    book_id = 1
+    mock_book = MagicMock(spec=Book)
+    mock_book.id = 1
+    mock_book.title = "Book 1"
+
+    query_mock = MagicMock()
+    query_mock.filter.return_value.first.return_value = mock_book
+    mock_db.query.return_value = query_mock
+
+    result = repository.get_book_by_id(book_id)
+
+    assert result == mock_book
+    assert result.id == 1
+    assert result.title == "Book 1"
+    mock_db.query.assert_called_once()
+
+def test_get_book_by_id_not_found(repository, mock_db):
+    """Test get_book_by_id raises ValueError when book not found."""
+    book_id = 999
+
+    query_mock = MagicMock()
+    query_mock.filter.return_value.first.return_value = None
+    mock_db.query.return_value = query_mock
+
+    with pytest.raises(ValueError) as exc_info:
+        repository.get_book_by_id(book_id)
+    assert "not found" in str(exc_info.value)
+
+def test_get_book_by_id_database_error(repository, mock_db):
+    """Test get_book_by_id raises SQLAlchemy error on db failure."""
+    book_id = 1
+    mock_db.query.side_effect = SQLAlchemyError("Connection failed")
+
+    with pytest.raises(SQLAlchemyError):
+        repository.get_book_by_id(book_id)
+
+def test_get_book_by_id_unexpected_error(repository, mock_db):
+    """Test get_book_by_id raises generic exceptions."""
+    book_id = 1
+    mock_db.query.side_effect = RuntimeError("Unexpected error")
+
+    with pytest.raises(RuntimeError):
+        repository.get_book_by_id(book_id)
+
+
+def test_update_book_success(repository, mock_db):
+    """Test update_book successfully updates and returns a book."""
+    from app.schemas.book import BookBase
+
+    book_id = 1
+    update_data = BookBase(title="Updated", author="Updated Author", published_year=2024, available=True)
+
+    # Mock the existing book
+    existing_book = MagicMock(spec=Book)
+    existing_book.id = 1
+    existing_book.title = "Old Title"
+    existing_book.author = "Old Author"
+
+    with patch.object(repository, 'get_book_by_id', return_value=existing_book):
+        mock_db.commit = MagicMock()
+        mock_db.refresh = MagicMock()
+
+        result = repository.update_book(book_id, update_data)
+
+    assert result == existing_book
+    assert existing_book.title == "Updated"
+    assert existing_book.author == "Updated Author"
+    mock_db.commit.assert_called_once()
+    mock_db.refresh.assert_called_once()
+
+def test_update_book_not_found(repository, mock_db):
+    """Test update_book raises ValueError when book not found."""
+    from app.schemas.book import BookBase
+
+    book_id = 999
+    update_data = BookBase(title="Updated", author="Author", published_year=2024, available=True)
+
+    with patch.object(repository, 'get_book_by_id', side_effect=ValueError(f"Book with id {book_id} not found")):
+        with pytest.raises(ValueError) as exc_info:
+            repository.update_book(book_id, update_data)
+        assert "not found" in str(exc_info.value)
+
+def test_update_book_database_error(repository, mock_db):
+    """Test update_book rolls back and re-raises SQLAlchemy error."""
+    from app.schemas.book import BookBase
+
+    book_id = 1
+    update_data = BookBase(title="Updated", author="Author", published_year=2024, available=True)
+
+    existing_book = MagicMock(spec=Book)
+    mock_db.commit = MagicMock(side_effect=SQLAlchemyError("Constraint violation"))
+    mock_db.rollback = MagicMock()
+
+    with patch.object(repository, 'get_book_by_id', return_value=existing_book):
+        with pytest.raises(SQLAlchemyError):
+            repository.update_book(book_id, update_data)
+
+    mock_db.rollback.assert_called_once()
+
+def test_update_book_unexpected_error(repository, mock_db):
+    """Test update_book rolls back and re-raises generic exceptions."""
+    from app.schemas.book import BookBase
+
+    book_id = 1
+    update_data = BookBase(title="Updated", author="Author", published_year=2024, available=True)
+
+    existing_book = MagicMock(spec=Book)
+    mock_db.commit = MagicMock(side_effect=RuntimeError("Unexpected error"))
+    mock_db.rollback = MagicMock()
+
+    with patch.object(repository, 'get_book_by_id', return_value=existing_book):
+        with pytest.raises(RuntimeError):
+            repository.update_book(book_id, update_data)
+
+    mock_db.rollback.assert_called_once()

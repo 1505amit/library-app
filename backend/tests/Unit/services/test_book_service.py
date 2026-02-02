@@ -102,3 +102,50 @@ def test_create_book_generic_exception(book_service):
 
     with pytest.raises(RuntimeError):
         book_service.create_book(new_book)
+
+def test_update_book_success(book_service):
+    """Test update_book successfully updates and returns a book."""
+    from app.schemas.book import BookBase
+    book_id = 1
+    update_data = BookBase(title="Updated", author="Updated Author", published_year=2024, available=True)
+    updated_book = BookResponse(id=1, **update_data.dict())
+    book_service.books_repository.update_book.return_value = updated_book
+
+    result = book_service.update_book(book_id, update_data)
+
+    assert result == updated_book
+    assert result.title == "Updated"
+    assert result.id == 1
+    book_service.books_repository.update_book.assert_called_once_with(book_id, update_data)
+
+def test_update_book_not_found(book_service):
+    """Test update_book raises ValueError when book not found."""
+    from app.schemas.book import BookBase
+    book_id = 999
+    update_data = BookBase(title="Updated", author="Author", published_year=2024, available=True)
+    book_service.books_repository.update_book.side_effect = ValueError(f"Book with id {book_id} not found")
+
+    with pytest.raises(ValueError) as exc_info:
+        book_service.update_book(book_id, update_data)
+    assert "not found" in str(exc_info.value)
+
+def test_update_book_database_error(book_service):
+    """Test update_book raises ValueError on SQLAlchemy error."""
+    from app.schemas.book import BookBase
+    book_id = 1
+    update_data = BookBase(title="Updated", author="Author", published_year=2024, available=True)
+    book_service.books_repository.update_book.side_effect = SQLAlchemyError("DB constraint violation")
+
+    with pytest.raises(ValueError) as exc_info:
+        book_service.update_book(book_id, update_data)
+    assert "Failed to update book in database" in str(exc_info.value)
+
+def test_update_book_generic_exception(book_service):
+    """Test update_book re-raises generic exceptions."""
+    from app.schemas.book import BookBase
+    book_id = 1
+    update_data = BookBase(title="Updated", author="Author", published_year=2024, available=True)
+    book_service.books_repository.update_book.side_effect = RuntimeError("Unexpected error")
+
+    with pytest.raises(RuntimeError):
+        book_service.update_book(book_id, update_data)

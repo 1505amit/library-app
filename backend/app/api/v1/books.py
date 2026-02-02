@@ -52,3 +52,20 @@ def add_book(book: BookBase, service: BookService = Depends(get_book_service)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create book"
         )
+    
+@router.put("/{book_id}", response_model=BookResponse)
+def update_book(book_id: int, book: BookBase, service: BookService = Depends(get_book_service)):
+    try:
+        return service.update_book(book_id, book)
+    except ValueError as e:
+        logger.warning(f"Validation error updating book: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error updating book: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update book"
+        )
