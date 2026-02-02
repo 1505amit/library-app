@@ -8,6 +8,7 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 def get_book_service(db: Session = Depends(get_db)) -> BookService:
     try:
         return BookService(db)
@@ -35,7 +36,8 @@ def get_books(service: BookService = Depends(get_book_service)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch books"
         )
-    
+
+
 @router.post("/", response_model=BookResponse)
 def add_book(book: BookBase, service: BookService = Depends(get_book_service)):
     try:
@@ -52,7 +54,8 @@ def add_book(book: BookBase, service: BookService = Depends(get_book_service)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create book"
         )
-    
+
+
 @router.put("/{book_id}", response_model=BookResponse)
 def update_book(book_id: int, book: BookBase, service: BookService = Depends(get_book_service)):
     try:

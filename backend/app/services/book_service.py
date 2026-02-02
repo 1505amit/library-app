@@ -6,6 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class BookService:
     def __init__(self, db: Session):
         if not db:

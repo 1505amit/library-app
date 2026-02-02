@@ -7,6 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class BookRepository:
     def __init__(self, db: Session):
         if not db:
