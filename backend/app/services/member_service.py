@@ -25,3 +25,15 @@ class MemberService:
         except Exception as e:
             logger.error(f"Unexpected error in create_member: {str(e)}")
             raise
+
+    def update_member(self, member_id: int, member: MemberBase):
+        try:
+            return self.member_repository.update_member(member_id, member)
+        except ValueError:
+            raise
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in update_member: {str(e)}")
+            raise ValueError("Failed to update member in database")
+        except Exception as e:
+            logger.error(f"Unexpected error in update_member: {str(e)}")
+            raise

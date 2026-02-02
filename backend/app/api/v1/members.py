@@ -38,3 +38,29 @@ def add_member(member: MemberBase, service: MemberService = Depends(get_member_s
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create member"
         )
+
+
+@router.put("/{member_id}", response_model=MemberResponse)
+def update_member(member_id: int, member: MemberBase, service: MemberService = Depends(get_member_service)):
+    try:
+        updated_member = service.update_member(member_id, member)
+        return updated_member
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            logger.warning(f"Member not found: {member_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_msg
+            )
+        logger.warning(f"Validation error updating member: {error_msg}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg
+        )
+    except Exception as e:
+        logger.error(f"Error updating member: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update member"
+        )
