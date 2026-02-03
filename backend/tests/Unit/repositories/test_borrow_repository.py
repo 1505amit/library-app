@@ -156,3 +156,96 @@ def test_create_borrow_unexpected_error(borrow_repository, mock_db, borrow_base,
     with pytest.raises(Exception):
         borrow_repository.create_borrow(borrow_base)
     mock_db.rollback.assert_called_once()
+
+# Test get_all_borrows
+
+
+def test_get_all_borrows_with_include_returned_true(borrow_repository, mock_db):
+    """Test get_all_borrows returns all records when include_returned=True."""
+    mock_active_borrow = MagicMock(spec=BorrowRecord)
+    mock_active_borrow.id = 1
+    mock_active_borrow.returned_at = None
+
+    mock_returned_borrow = MagicMock(spec=BorrowRecord)
+    mock_returned_borrow.id = 2
+    mock_returned_borrow.returned_at = datetime.utcnow()
+
+    mock_db.query.return_value.all.return_value = [
+        mock_active_borrow,
+        mock_returned_borrow
+    ]
+
+    result = borrow_repository.get_all_borrows(include_returned=True)
+
+    assert len(result) == 2
+    assert result[0].id == 1
+    assert result[1].id == 2
+    mock_db.query.assert_called_once_with(BorrowRecord)
+    # When include_returned=True, no filter is applied
+    mock_db.query.return_value.filter.assert_not_called()
+    mock_db.query.return_value.all.assert_called_once()
+
+
+def test_get_all_borrows_with_include_returned_false(borrow_repository, mock_db):
+    """Test get_all_borrows filters only active records when include_returned=False."""
+    mock_active_borrow = MagicMock(spec=BorrowRecord)
+    mock_active_borrow.id = 1
+    mock_active_borrow.returned_at = None
+
+    mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_active_borrow
+    ]
+
+    result = borrow_repository.get_all_borrows(include_returned=False)
+
+    assert len(result) == 1
+    assert result[0].id == 1
+    mock_db.query.assert_called_once_with(BorrowRecord)
+    mock_db.query.return_value.filter.assert_called_once()
+    mock_db.query.return_value.filter.return_value.all.assert_called_once()
+
+
+def test_get_all_borrows_empty_list_include_returned_true(borrow_repository, mock_db):
+    """Test get_all_borrows returns empty list when no records exist with include_returned=True."""
+    mock_db.query.return_value.all.return_value = []
+
+    result = borrow_repository.get_all_borrows(include_returned=True)
+
+    assert len(result) == 0
+    mock_db.query.return_value.all.assert_called_once()
+
+
+def test_get_all_borrows_empty_list_include_returned_false(borrow_repository, mock_db):
+    """Test get_all_borrows returns empty list when no active records exist with include_returned=False."""
+    mock_db.query.return_value.filter.return_value.all.return_value = []
+
+    result = borrow_repository.get_all_borrows(include_returned=False)
+
+    assert len(result) == 0
+    mock_db.query.return_value.filter.return_value.all.assert_called_once()
+
+
+def test_get_all_borrows_database_error(borrow_repository, mock_db):
+    """Test get_all_borrows when database error occurs."""
+    mock_db.query.return_value.all.side_effect = SQLAlchemyError(
+        "Database error")
+
+    with pytest.raises(SQLAlchemyError):
+        borrow_repository.get_all_borrows(include_returned=True)
+
+
+def test_get_all_borrows_database_error_with_filter(borrow_repository, mock_db):
+    """Test get_all_borrows when database error occurs with filter."""
+    mock_db.query.return_value.filter.return_value.all.side_effect = SQLAlchemyError(
+        "Database error")
+
+    with pytest.raises(SQLAlchemyError):
+        borrow_repository.get_all_borrows(include_returned=False)
+
+
+def test_get_all_borrows_unexpected_error(borrow_repository, mock_db):
+    """Test get_all_borrows when unexpected error occurs."""
+    mock_db.query.return_value.all.side_effect = Exception("Unexpected error")
+
+    with pytest.raises(Exception):
+        borrow_repository.get_all_borrows(include_returned=True)

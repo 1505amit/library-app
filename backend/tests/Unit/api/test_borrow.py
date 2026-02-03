@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from datetime import datetime
 
 from app.main import app
-from app.schemas.borrow import BorrowResponse, BorrowRequest
+from app.schemas.borrow import BorrowResponse, BorrowRequest, BorrowDetailedResponse
 from app.services.borrow_service import BorrowService
 from app.api.v1.borrow import get_borrow_service
 
@@ -40,9 +40,54 @@ def mock_borrow_response():
         returned_at=None
     )
 
+
+@pytest.fixture
+def mock_borrow_detailed_response():
+    """Mock detailed borrow response fixture."""
+    return BorrowDetailedResponse(
+        id=1,
+        book_id=1,
+        member_id=1,
+        borrowed_at=datetime.utcnow(),
+        returned_at=None,
+        book={
+            "id": 1,
+            "title": "Test Book",
+            "author": "Test Author",
+            "published_year": 2025
+        },
+        member={
+            "id": 1,
+            "name": "Test Member",
+            "email": "test@example.com"
+        }
+    )
+
+
+@pytest.fixture
+def mock_returned_borrow_response():
+    """Mock returned borrow response fixture."""
+    return BorrowDetailedResponse(
+        id=2,
+        book_id=2,
+        member_id=2,
+        borrowed_at=datetime(2026, 1, 1),
+        returned_at=datetime(2026, 2, 1),
+        book={
+            "id": 2,
+            "title": "Returned Book",
+            "author": "Author Name",
+            "published_year": 2021
+        },
+        member={
+            "id": 2,
+            "name": "Another Member",
+            "email": "another@example.com"
+        }
+    )
+
+
 # Test get_borrow_service dependency
-
-
 def test_get_borrow_service_success(mock_db):
     """Test successful initialization of BorrowService."""
     with patch('app.api.v1.borrow.BorrowService') as mock_service_class:
@@ -148,3 +193,101 @@ def test_borrow_book_database_error(client):
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "Failed to borrow book" in response.json()["detail"]
+
+
+# Test get_all_borrows endpoint
+def test_get_all_borrows_default_include_returned(client, mock_borrow_detailed_response, mock_returned_borrow_response):
+    """Test getting all borrows with include_returned=True (default)."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.return_value = [
+        mock_borrow_detailed_response,
+        mock_returned_borrow_response
+    ]
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["id"] == 1
+    assert data[0]["returned_at"] is None
+    assert data[1]["id"] == 2
+    assert data[1]["returned_at"] is not None
+    mock_service.get_all_borrows.assert_called_once_with(include_returned=True)
+
+
+def test_get_all_borrows_with_include_returned_true(client, mock_borrow_detailed_response, mock_returned_borrow_response):
+    """Test getting all borrows with include_returned=True explicitly."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.return_value = [
+        mock_borrow_detailed_response,
+        mock_returned_borrow_response
+    ]
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/?include_returned=true")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 2
+    mock_service.get_all_borrows.assert_called_once_with(include_returned=True)
+
+
+def test_get_all_borrows_with_include_returned_false(client, mock_borrow_detailed_response):
+    """Test getting only active borrows with include_returned=False."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.return_value = [
+        mock_borrow_detailed_response
+    ]
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/?include_returned=false")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == 1
+    assert data[0]["returned_at"] is None
+    mock_service.get_all_borrows.assert_called_once_with(
+        include_returned=False)
+
+
+def test_get_all_borrows_empty_list(client):
+    """Test getting borrows when no records exist."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.return_value = []
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 0
+    mock_service.get_all_borrows.assert_called_once_with(include_returned=True)
+
+
+def test_get_all_borrows_validation_error(client):
+    """Test get_all_borrows when service raises ValueError."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.side_effect = ValueError(
+        "Failed to retrieve borrow records")
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Failed to retrieve borrow records" in response.json()["detail"]
+
+
+def test_get_all_borrows_database_error(client):
+    """Test get_all_borrows when service raises generic Exception."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.side_effect = Exception(
+        "Database connection failed")
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/")
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Failed to retrieve borrow records" in response.json()["detail"]
