@@ -36,3 +36,15 @@ class BorrowService:
         except Exception as e:
             logger.error(f"Unexpected error in get_all_borrows: {str(e)}")
             raise
+
+    def return_borrow(self, borrow_id: int):
+        try:
+            return self.borrow_repository.return_borrow(borrow_id)
+        except ValueError:
+            raise
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in return_borrow: {str(e)}")
+            raise ValueError("Failed to return book to database")
+        except Exception as e:
+            logger.error(f"Unexpected error in return_borrow: {str(e)}")
+            raise

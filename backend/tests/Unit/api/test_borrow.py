@@ -291,3 +291,73 @@ def test_get_all_borrows_database_error(client):
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "Failed to retrieve borrow records" in response.json()["detail"]
+
+
+# Test return_book endpoint
+def test_return_book_success(client, mock_returned_borrow_response):
+    """Test successful book return."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.return_borrow.return_value = mock_returned_borrow_response
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.patch("/api/v1/borrow/1/return")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["id"] == 2
+    assert data["book_id"] == 2
+    assert data["member_id"] == 2
+    assert data["returned_at"] is not None
+    mock_service.return_borrow.assert_called_once_with(1)
+
+
+def test_return_book_not_found(client):
+    """Test returning when borrow record does not exist."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.return_borrow.side_effect = ValueError(
+        "Borrow record with id 999 not found")
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.patch("/api/v1/borrow/999/return")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "not found" in response.json()["detail"]
+
+
+def test_return_book_already_returned(client):
+    """Test returning a book that was already returned."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.return_borrow.side_effect = ValueError(
+        "Borrow record with id 1 has already been returned")
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.patch("/api/v1/borrow/1/return")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "already been returned" in response.json()["detail"]
+
+
+def test_return_book_book_not_found(client):
+    """Test return when associated book does not exist (edge case)."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.return_borrow.side_effect = ValueError(
+        "Book with id 999 not found")
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.patch("/api/v1/borrow/1/return")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "not found" in response.json()["detail"]
+
+
+def test_return_book_database_error(client):
+    """Test returning when database error occurs."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.return_borrow.side_effect = Exception(
+        "Database connection failed")
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.patch("/api/v1/borrow/1/return")
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Failed to return book" in response.json()["detail"]

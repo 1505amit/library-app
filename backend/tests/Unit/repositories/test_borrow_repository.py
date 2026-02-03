@@ -249,3 +249,125 @@ def test_get_all_borrows_unexpected_error(borrow_repository, mock_db):
 
     with pytest.raises(Exception):
         borrow_repository.get_all_borrows(include_returned=True)
+
+# Test return_borrow
+
+
+def test_return_borrow_success(borrow_repository, mock_db, mock_book):
+    """Test successful book return."""
+    mock_borrow_record = MagicMock(spec=BorrowRecord)
+    mock_borrow_record.id = 1
+    mock_borrow_record.book_id = 1
+    mock_borrow_record.returned_at = None
+
+    # Setup query mocks for borrow and book
+    def query_side_effect(model):
+        mock_query = MagicMock()
+        if model == BorrowRecord:
+            mock_query.filter.return_value.first.return_value = mock_borrow_record
+        elif model == Book:
+            mock_query.filter.return_value.first.return_value = mock_book
+        return mock_query
+
+    mock_db.query.side_effect = query_side_effect
+
+    result = borrow_repository.return_borrow(1)
+
+    assert result.id == 1
+    assert mock_borrow_record.returned_at is not None
+    assert mock_book.available == True
+    mock_db.commit.assert_called_once()
+    mock_db.refresh.assert_called_once()
+
+
+def test_return_borrow_not_found(borrow_repository, mock_db):
+    """Test return_borrow when borrow record does not exist."""
+    mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    with pytest.raises(ValueError) as exc_info:
+        borrow_repository.return_borrow(999)
+    assert "not found" in str(exc_info.value)
+    mock_db.rollback.assert_called_once()
+
+
+def test_return_borrow_already_returned(borrow_repository, mock_db):
+    """Test return_borrow when book was already returned."""
+    mock_borrow_record = MagicMock(spec=BorrowRecord)
+    mock_borrow_record.id = 1
+    mock_borrow_record.returned_at = datetime(2026, 2, 5)
+
+    mock_db.query.return_value.filter.return_value.first.return_value = mock_borrow_record
+
+    with pytest.raises(ValueError) as exc_info:
+        borrow_repository.return_borrow(1)
+    assert "already been returned" in str(exc_info.value)
+    mock_db.rollback.assert_called_once()
+
+
+def test_return_borrow_book_not_found(borrow_repository, mock_db):
+    """Test return_borrow when associated book does not exist."""
+    mock_borrow_record = MagicMock(spec=BorrowRecord)
+    mock_borrow_record.id = 1
+    mock_borrow_record.book_id = 999
+    mock_borrow_record.returned_at = None
+
+    def query_side_effect(model):
+        mock_query = MagicMock()
+        if model == BorrowRecord:
+            mock_query.filter.return_value.first.return_value = mock_borrow_record
+        elif model == Book:
+            mock_query.filter.return_value.first.return_value = None
+        return mock_query
+
+    mock_db.query.side_effect = query_side_effect
+
+    with pytest.raises(ValueError) as exc_info:
+        borrow_repository.return_borrow(1)
+    assert "not found" in str(exc_info.value)
+    mock_db.rollback.assert_called_once()
+
+
+def test_return_borrow_database_error(borrow_repository, mock_db, mock_book):
+    """Test return_borrow when database error occurs during commit."""
+    mock_borrow_record = MagicMock(spec=BorrowRecord)
+    mock_borrow_record.id = 1
+    mock_borrow_record.book_id = 1
+    mock_borrow_record.returned_at = None
+
+    def query_side_effect(model):
+        mock_query = MagicMock()
+        if model == BorrowRecord:
+            mock_query.filter.return_value.first.return_value = mock_borrow_record
+        elif model == Book:
+            mock_query.filter.return_value.first.return_value = mock_book
+        return mock_query
+
+    mock_db.query.side_effect = query_side_effect
+    mock_db.commit.side_effect = SQLAlchemyError("Database error")
+
+    with pytest.raises(SQLAlchemyError):
+        borrow_repository.return_borrow(1)
+    mock_db.rollback.assert_called_once()
+
+
+def test_return_borrow_unexpected_error(borrow_repository, mock_db, mock_book):
+    """Test return_borrow when unexpected error occurs."""
+    mock_borrow_record = MagicMock(spec=BorrowRecord)
+    mock_borrow_record.id = 1
+    mock_borrow_record.book_id = 1
+    mock_borrow_record.returned_at = None
+
+    def query_side_effect(model):
+        mock_query = MagicMock()
+        if model == BorrowRecord:
+            mock_query.filter.return_value.first.return_value = mock_borrow_record
+        elif model == Book:
+            mock_query.filter.return_value.first.return_value = mock_book
+        return mock_query
+
+    mock_db.query.side_effect = query_side_effect
+    mock_db.commit.side_effect = Exception("Unexpected error")
+
+    with pytest.raises(Exception):
+        borrow_repository.return_borrow(1)
+    mock_db.rollback.assert_called_once()
