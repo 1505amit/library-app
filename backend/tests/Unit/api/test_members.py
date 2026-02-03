@@ -254,3 +254,68 @@ def test_update_member_missing_email(client):
     response = client.put("/api/v1/members/1", json=invalid_update)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+# Test list_members endpoint
+
+
+def test_list_members_success(client, member_response):
+    """Test list_members returns all members successfully."""
+    mock_members = [
+        MemberResponse(id=1, name="John Doe", email="john@example.com",
+                       phone="1234567890", active=True),
+        MemberResponse(id=2, name="Jane Smith",
+                       email="jane@example.com", phone="9876543210", active=True),
+        MemberResponse(id=3, name="Bob Johnson",
+                       email="bob@example.com", phone=None, active=False),
+    ]
+
+    mock_service = MagicMock(spec=MemberService)
+    mock_service.get_all_members.return_value = mock_members
+    app.dependency_overrides[get_member_service] = lambda: mock_service
+
+    response = client.get("/api/v1/members/")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 3
+    assert data[0]["name"] == "John Doe"
+    assert data[1]["email"] == "jane@example.com"
+    assert data[2]["active"] is False
+
+
+def test_list_members_empty(client):
+    """Test list_members when no members exist."""
+    mock_service = MagicMock(spec=MemberService)
+    mock_service.get_all_members.return_value = []
+    app.dependency_overrides[get_member_service] = lambda: mock_service
+
+    response = client.get("/api/v1/members/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+
+def test_list_members_validation_error(client):
+    """Test list_members when service raises ValueError (validation error)."""
+    mock_service = MagicMock(spec=MemberService)
+    mock_service.get_all_members.side_effect = ValueError(
+        "Invalid query parameters")
+    app.dependency_overrides[get_member_service] = lambda: mock_service
+
+    response = client.get("/api/v1/members/")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Invalid query parameters" in response.json()["detail"]
+
+
+def test_list_members_database_error(client):
+    """Test list_members when service raises a general Exception (database error)."""
+    mock_service = MagicMock(spec=MemberService)
+    mock_service.get_all_members.side_effect = Exception(
+        "Database connection failed")
+    app.dependency_overrides[get_member_service] = lambda: mock_service
+
+    response = client.get("/api/v1/members/")
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Failed to retrieve members" in response.json()["detail"]
