@@ -1,10 +1,11 @@
 from app.services.borrow_service import BorrowService
-from app.schemas.borrow import BorrowResponse, BorrowRequest, BorrowReturnRequest
+from app.schemas.borrow import BorrowResponse, BorrowRequest, BorrowReturnRequest, BorrowDetailedResponse
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.common.database import get_db
 from datetime import datetime
 import logging
+from typing import List
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -18,6 +19,37 @@ def get_borrow_service(db: Session = Depends(get_db)) -> BorrowService:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to initialize borrow service"
+        )
+
+
+@router.get("/", response_model=List[BorrowDetailedResponse])
+def get_all_borrows(
+    include_returned: bool = True,
+    service: BorrowService = Depends(get_borrow_service)
+):
+    """
+    Get borrowed books with optional filtering for returned books.
+
+    Query Parameters:
+    - **include_returned** (bool, default: True): Include returned books in the response.
+      - If True: Returns all borrow records (active and returned)
+      - If False: Returns only active borrow records (not yet returned)
+
+    Returns a list of borrow records with their book and member details.
+    """
+    try:
+        return service.get_all_borrows(include_returned=include_returned)
+    except ValueError as e:
+        logger.warning(f"Validation error retrieving borrow records: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving borrow records: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve borrow records"
         )
 
 

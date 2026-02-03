@@ -57,3 +57,20 @@ class BorrowRepository:
             self.db.rollback()
             logger.error(f"Unexpected error in create_borrow: {str(e)}")
             raise
+
+    def get_all_borrows(self, include_returned: bool = True):
+        try:
+            query = self.db.query(BorrowRecord)
+
+            # Filter out returned books if include_returned is False
+            if not include_returned:
+                query = query.filter(BorrowRecord.returned_at.is_(None))
+
+            borrow_records = query.all()
+            return borrow_records
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in get_all_borrows: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in get_all_borrows: {str(e)}")
+            raise
