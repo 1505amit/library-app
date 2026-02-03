@@ -75,3 +75,29 @@ def borrow_book(borrow: BorrowRequest, service: BorrowService = Depends(get_borr
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to borrow book"
         )
+
+
+@router.patch("/{borrow_id}/return", response_model=BorrowDetailedResponse)
+def return_book(borrow_id: int, service: BorrowService = Depends(get_borrow_service)):
+    """
+    Return a borrowed book.
+
+    The returned_at timestamp is automatically set to the current time by the backend.
+
+    Path Parameters:
+    - **borrow_id**: ID of the borrow record to mark as returned
+    """
+    try:
+        return service.return_borrow(borrow_id)
+    except ValueError as e:
+        logger.warning(f"Validation error returning book: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error returning book: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to return book"
+        )

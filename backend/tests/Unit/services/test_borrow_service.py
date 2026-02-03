@@ -179,3 +179,79 @@ def test_get_all_borrows_unexpected_error(borrow_service):
 
     with pytest.raises(Exception):
         borrow_service.get_all_borrows(include_returned=True)
+
+# Test return_borrow
+
+
+def test_return_borrow_success(borrow_service):
+    """Test successful book return."""
+    mock_returned_borrow = MagicMock(spec=BorrowRecord)
+    mock_returned_borrow.id = 1
+    mock_returned_borrow.book_id = 1
+    mock_returned_borrow.member_id = 1
+    mock_returned_borrow.returned_at = datetime.utcnow()
+
+    borrow_service.borrow_repository.return_borrow = MagicMock(
+        return_value=mock_returned_borrow
+    )
+
+    result = borrow_service.return_borrow(1)
+
+    assert result.id == 1
+    assert result.returned_at is not None
+    borrow_service.borrow_repository.return_borrow.assert_called_once_with(1)
+
+
+def test_return_borrow_not_found(borrow_service):
+    """Test return_borrow when borrow record does not exist."""
+    borrow_service.borrow_repository.return_borrow = MagicMock(
+        side_effect=ValueError("Borrow record with id 999 not found")
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        borrow_service.return_borrow(999)
+    assert "not found" in str(exc_info.value)
+
+
+def test_return_borrow_already_returned(borrow_service):
+    """Test return_borrow when book was already returned."""
+    borrow_service.borrow_repository.return_borrow = MagicMock(
+        side_effect=ValueError(
+            "Borrow record with id 1 has already been returned")
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        borrow_service.return_borrow(1)
+    assert "already been returned" in str(exc_info.value)
+
+
+def test_return_borrow_book_not_found(borrow_service):
+    """Test return_borrow when associated book does not exist."""
+    borrow_service.borrow_repository.return_borrow = MagicMock(
+        side_effect=ValueError("Book with id 999 not found")
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        borrow_service.return_borrow(1)
+    assert "not found" in str(exc_info.value)
+
+
+def test_return_borrow_database_error(borrow_service):
+    """Test return_borrow when repository raises SQLAlchemyError."""
+    borrow_service.borrow_repository.return_borrow = MagicMock(
+        side_effect=SQLAlchemyError("Database error")
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        borrow_service.return_borrow(1)
+    assert "Failed to return book to database" in str(exc_info.value)
+
+
+def test_return_borrow_unexpected_error(borrow_service):
+    """Test return_borrow when repository raises unexpected exception."""
+    borrow_service.borrow_repository.return_borrow = MagicMock(
+        side_effect=Exception("Unexpected error")
+    )
+
+    with pytest.raises(Exception):
+        borrow_service.return_borrow(1)
