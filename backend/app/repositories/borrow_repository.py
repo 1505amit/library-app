@@ -1,0 +1,59 @@
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+from app.models.borrow import BorrowRecord
+from app.models.book import Book
+from app.models.member import Member
+from app.schemas.borrow import BorrowBase
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class BorrowRepository:
+    def __init__(self, db: Session):
+        if not db:
+            raise ValueError("Database session cannot be None")
+        self.db = db
+
+    def create_borrow(self, borrow: BorrowBase):
+        try:
+            # Verify book exists and is available
+            book = self.db.query(Book).filter(
+                Book.id == borrow.book_id).first()
+            if not book:
+                raise ValueError(f"Book with id {borrow.book_id} not found")
+            if not book.available:
+                raise ValueError(
+                    f"Book with id {borrow.book_id} is not available")
+
+            # Verify member exists
+            member = self.db.query(Member).filter(
+                Member.id == borrow.member_id).first()
+            if not member:
+                raise ValueError(
+                    f"Member with id {borrow.member_id} not found")
+            if not member.active:
+                raise ValueError(
+                    f"Member with id {borrow.member_id} is not active")
+
+            # Create borrow record
+            db_borrow = BorrowRecord(**borrow.dict())
+            self.db.add(db_borrow)
+
+            # Mark book as unavailable
+            book.available = False
+
+            self.db.commit()
+            self.db.refresh(db_borrow)
+            return db_borrow
+        except ValueError:
+            self.db.rollback()
+            raise
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Database error in create_borrow: {str(e)}")
+            raise
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Unexpected error in create_borrow: {str(e)}")
+            raise
