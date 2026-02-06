@@ -21,4 +21,3 @@ const ErrorSnackbar = ({
 };
 
 export default ErrorSnackbar;
-}

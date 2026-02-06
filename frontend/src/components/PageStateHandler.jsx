@@ -12,7 +12,7 @@ const PageStateHandler = ({
   data,
   emptyMessage = "No data available at the moment.",
   children,
-}) {
+}) => {
   // Loading State
   if (loading) {
     return (
