@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     postgres_port: int = Field(5432, env="POSTGRES_PORT")
 
     debug: bool = Field(False, env="DEBUG")
+    allowed_origins: str = Field(
+        "http://localhost:3000,http://localhost:5173",
+        env="ALLOWED_ORIGINS"
+    )
 
     @property
     def database_url(self) -> str:

@@ -2,7 +2,7 @@ import { AppBar, Toolbar, Typography, Button } from "@mui/material";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-export default function Navbar() {
+const Navbar = () => {
   const { isAuthenticated, logout } = useAuth();
 
   return (
@@ -22,4 +22,6 @@ export default function Navbar() {
       </Toolbar>
     </AppBar>
   );
-}
+};
+
+export default Navbar;

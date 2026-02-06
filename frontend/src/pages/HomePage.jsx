@@ -1,6 +1,6 @@
 import { Container, Typography, Box, Paper } from "@mui/material";
 
-export default function HomePage() {
+const HomePage = () => {
   return (
     <Container maxWidth="md">
       <Box sx={{ mt: 4 }}>
@@ -17,4 +17,6 @@ export default function HomePage() {
       </Box>
     </Container>
   );
-}
+};
+
+export default HomePage;

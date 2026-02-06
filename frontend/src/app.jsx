@@ -8,7 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 
-function App() {
+const App = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
@@ -51,6 +51,6 @@ function App() {
       </BrowserRouter>
     </AuthProvider>
   );
-}
+};
 
 export default App;
