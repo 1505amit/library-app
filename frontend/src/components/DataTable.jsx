@@ -24,11 +24,14 @@ const DataTable = ({ columns, rows, onAction }) => {
         <TableBody>
           {rows.map((row) => (
             <TableRow key={row.id}>
-              {columns.map((col) => (
-                <TableCell key={col.field}>
-                  {col.render ? col.render(row[col.field], row) : row[col.field]}
-                </TableCell>
-              ))}
+              {columns.map((col) => {
+                const value = col.field.split('.').reduce((acc, key) => acc[key], row);
+                return (
+                  <TableCell key={col.field}>
+                    {col.render ? col.render(value, row) : value}
+                  </TableCell>
+                );
+              })}
               {onAction && (
                 <TableCell>
                   <Button

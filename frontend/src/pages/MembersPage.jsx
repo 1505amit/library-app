@@ -14,7 +14,6 @@ const MembersPage = () => {
     { field: "name", headerName: "Name" },
     { field: "email", headerName: "Email" },
     { field: "phone", headerName: "Phone" },
-    { field: "membership_date", headerName: "Member Since" },
   ];
 
   const handleEdit = (member) => {
