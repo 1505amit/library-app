@@ -25,3 +25,14 @@ export const borrowBook = async (borrowData) => {
     throw error;
   }
 };
+
+// Return a borrowed book
+export const returnBook = async (borrowId) => {
+  try {
+    const response = await api.patch(`/borrow/${borrowId}/return`);
+    return response.data;
+  } catch (error) {
+    console.error("Error returning book:", error);
+    throw error;
+  }
+};
