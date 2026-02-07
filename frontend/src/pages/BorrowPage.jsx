@@ -3,21 +3,54 @@ import {
   Container,
   Typography,
   Box,
-  Chip,
   FormControlLabel,
   Checkbox,
+  Button,
 } from "@mui/material";
 import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
+import BorrowFormModal from "../components/BorrowFormModal";
 import { useDataFetch } from "../hooks/useDataFetch";
-import { getBorrows } from "../api/borrow";
+import { getBorrows, borrowBook } from "../api/borrow";
 import { formatDateTime } from "../utils/dateFormatter";
 
 const BorrowPage = () => {
   const [includeReturned, setIncludeReturned] = useState(true);
-  const { data: borrows, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification } =
+  const { data: borrows, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
     useDataFetch(() => getBorrows(includeReturned), [includeReturned]);
+
+  // Modal and borrow states
+  const [openBorrowModal, setOpenBorrowModal] = useState(false);
+  const [borrowLoading, setBorrowLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [openSuccessSnackbar, setOpenSuccessSnackbar] = useState(false);
+  const [borrowError, setBorrowError] = useState("");
+  const [openErrorSnackbar, setOpenErrorSnackbar] = useState(false);
+
+  // Handle borrow submission from modal
+  const handleBorrow = async (borrowData) => {
+    try {
+      setBorrowLoading(true);
+      await borrowBook(borrowData);
+      
+      // Success
+      setSuccessMessage("Book borrowed successfully!");
+      setOpenSuccessSnackbar(true);
+      setOpenBorrowModal(false);
+      
+      // Reload borrow records
+      await refetch();
+    } catch (error) {
+      const errorMsg =
+        error.response?.data?.detail || "Failed to borrow book. Please try again.";
+      setBorrowError(errorMsg);
+      setOpenErrorSnackbar(true);
+      console.error("Error borrowing book:", error);
+    } finally {
+      setBorrowLoading(false);
+    }
+  };
 
   const columns = [
     { field: "id", headerName: "ID" },
@@ -43,9 +76,18 @@ const BorrowPage = () => {
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Borrowed Books
-        </Typography>
+        {/* Heading with Borrow Button */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+          <Typography variant="h4">
+            Borrowed Books
+          </Typography>
+          <Button
+            variant="contained"
+            onClick={() => setOpenBorrowModal(true)}
+          >
+            Borrow a Book
+          </Button>
+        </Box>
 
         {/* Filter Section */}
         <Box sx={{ mb: 3 }}>
@@ -76,6 +118,31 @@ const BorrowPage = () => {
           />
         </PageStateHandler>
 
+        {/* Borrow Form Modal */}
+        <BorrowFormModal
+          open={openBorrowModal}
+          onClose={() => setOpenBorrowModal(false)}
+          onSubmit={handleBorrow}
+          isLoading={borrowLoading}
+        />
+
+        {/* Error Notification */}
+        <Notification
+          open={openErrorSnackbar}
+          message={borrowError}
+          type="error"
+          onClose={() => setOpenErrorSnackbar(false)}
+        />
+
+        {/* Success Notification */}
+        <Notification
+          open={openSuccessSnackbar}
+          message={successMessage}
+          type="success"
+          onClose={() => setOpenSuccessSnackbar(false)}
+        />
+
+        {/* Fetch Error Notification */}
         <Notification
           open={openFetchNotification}
           message={fetchError}
