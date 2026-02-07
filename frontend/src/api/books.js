@@ -10,3 +10,14 @@ export const getBooks = async () => {
     throw error;
   }
 };
+
+// Create a new book
+export const createBook = async (bookData) => {
+  try {
+    const response = await api.post("/books/", bookData);
+    return response.data;
+  } catch (error) {
+    console.error("Error creating book:", error);
+    throw error;
+  }
+};
