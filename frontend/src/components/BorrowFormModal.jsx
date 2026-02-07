@@ -168,7 +168,7 @@ const BorrowFormModal = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Borrow a Book</DialogTitle>
+      <DialogTitle>Create Borrow Record</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
           {/* Error message */}
