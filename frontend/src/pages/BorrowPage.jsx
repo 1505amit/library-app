@@ -9,14 +9,14 @@ import {
 } from "@mui/material";
 import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
-import ErrorSnackbar from "../components/ErrorSnackbar";
+import Notification from "../components/Notification";
 import { useDataFetch } from "../hooks/useDataFetch";
 import { getBorrows } from "../api/borrow";
 import { formatDateTime } from "../utils/dateFormatter";
 
 const BorrowPage = () => {
   const [includeReturned, setIncludeReturned] = useState(true);
-  const { data: borrows, loading, error, openSnackbar, setOpenSnackbar } =
+  const { data: borrows, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification } =
     useDataFetch(() => getBorrows(includeReturned), [includeReturned]);
 
   const columns = [
@@ -76,10 +76,11 @@ const BorrowPage = () => {
           />
         </PageStateHandler>
 
-        <ErrorSnackbar
-          open={openSnackbar}
-          message={error}
-          onClose={() => setOpenSnackbar(false)}
+        <Notification
+          open={openFetchNotification}
+          message={fetchError}
+          type="error"
+          onClose={() => setOpenFetchNotification(false)}
         />
       </Box>
     </Container>

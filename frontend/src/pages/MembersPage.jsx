@@ -1,12 +1,12 @@
 import { Container, Typography, Box } from "@mui/material";
 import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
-import ErrorSnackbar from "../components/ErrorSnackbar";
+import Notification from "../components/Notification";
 import { useDataFetch } from "../hooks/useDataFetch";
 import { getMembers } from "../api/members";
 
 const MembersPage = () => {
-  const { data: members, loading, error, openSnackbar, setOpenSnackbar } =
+  const { data: members, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification } =
     useDataFetch(getMembers);
 
   const columns = [
@@ -43,10 +43,11 @@ const MembersPage = () => {
           />
         </PageStateHandler>
 
-        <ErrorSnackbar
-          open={openSnackbar}
-          message={error}
-          onClose={() => setOpenSnackbar(false)}
+        <Notification
+          open={openFetchNotification}
+          message={fetchError}
+          type="error"
+          onClose={() => setOpenFetchNotification(false)}
         />
       </Box>
     </Container>
