@@ -32,6 +32,7 @@ const BorrowFormModal = ({
   onClose,
   onSubmit,
   isLoading = false,
+  book = null, // Optional: when provided, only member dropdown is shown
 }) => {
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [errors, setErrors] = useState(INITIAL_ERRORS);
@@ -49,17 +50,27 @@ const BorrowFormModal = ({
         try {
           const [membersData, booksData] = await Promise.all([
             getMembers(),
-            getBooks(),
+            book ? Promise.resolve(null) : getBooks(),
           ]);
           // Filter active members and available books
           const activeMembers = membersData.filter((m) => m.active);
-          const availableBooks = booksData.filter((b) => b.available);
           setMembers(activeMembers);
-          setBooks(availableBooks);
+
+          // Only set available books if not in single-book mode
+          if (!book && booksData) {
+            const availableBooks = booksData.filter((b) => b.available);
+            setBooks(availableBooks);
+          }
+
+          // If book is provided, set it in form data
+          if (book) {
+            setFormData({ member_id: "", book_id: book.id });
+          }
+
           setLoadError("");
         } catch (error) {
           console.error("Error loading form data:", error);
-          setLoadError("Failed to load members and books");
+          setLoadError("Failed to load form data");
         } finally {
           setLoadingOptions(false);
         }
@@ -67,11 +78,13 @@ const BorrowFormModal = ({
 
       loadData();
       // Reset form
-      setFormData({ ...INITIAL_FORM_STATE });
+      if (!book) {
+        setFormData({ ...INITIAL_FORM_STATE });
+      }
       setErrors(INITIAL_ERRORS);
       setTouched({});
     }
-  }, [open]);
+  }, [open, book]);
 
   // Validate form field
   const validateField = useCallback((name, value) => {
@@ -115,28 +128,34 @@ const BorrowFormModal = ({
   // Handle form submission
   const handleSubmit = useCallback(async () => {
     // Mark all fields as touched
-    const allFieldsTouched = {
-      member_id: true,
-      book_id: true,
-    };
-    setTouched(allFieldsTouched);
+    const fieldsToCheck = { member_id: true };
+    if (!book) {
+      fieldsToCheck.book_id = true;
+    }
+    setTouched(fieldsToCheck);
 
     // Validate all fields
     const memberError = validateField("member_id", formData.member_id);
-    const bookError = validateField("book_id", formData.book_id);
-    const newErrors = {
-      member_id: memberError,
-      book_id: bookError,
-    };
+    const newErrors = { member_id: memberError };
+
+    if (!book) {
+      const bookError = validateField("book_id", formData.book_id);
+      newErrors.book_id = bookError;
+    }
     setErrors(newErrors);
 
     // Check if form is valid
-    if (memberError === "" && bookError === "") {
+    const isValid = book
+      ? memberError === ""
+      : memberError === "" && newErrors.book_id === "";
+
+    if (isValid) {
       try {
-        await onSubmit({
+        const borrowData = {
           member_id: parseInt(formData.member_id),
-          book_id: parseInt(formData.book_id),
-        });
+          book_id: book ? book.id : parseInt(formData.book_id),
+        };
+        await onSubmit(borrowData);
         // Reset form on success
         setFormData({ ...INITIAL_FORM_STATE });
         setTouched({});
@@ -145,7 +164,7 @@ const BorrowFormModal = ({
         // Error is handled by parent component
       }
     }
-  }, [formData, validateField, onSubmit]);
+  }, [formData, validateField, onSubmit, book]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -157,6 +176,28 @@ const BorrowFormModal = ({
             <Typography color="error" variant="body2">
               {loadError}
             </Typography>
+          )}
+
+          {/* Book Info - only show when book is provided */}
+          {book && (
+            <Box sx={{ p: 2, backgroundColor: "#f5f5f5", borderRadius: 1 }}>
+              <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
+                <Typography variant="body1" color="textSecondary">
+                  Book:
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {book.title}
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Typography variant="body1" color="textSecondary">
+                  Author:
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {book.author}
+                </Typography>
+              </Box>
+            </Box>
           )}
 
           {/* Member Dropdown */}
@@ -188,34 +229,36 @@ const BorrowFormModal = ({
             )}
           </FormControl>
 
-          {/* Book Dropdown */}
-          <FormControl fullWidth disabled={loadingOptions}>
-            <InputLabel id="book-select-label">Book</InputLabel>
-            <Select
-              labelId="book-select-label"
-              id="book-select"
-              name="book_id"
-              value={formData.book_id}
-              onChange={handleInputChange}
-              onBlur={handleBlur}
-              label="Book"
-              error={touched.book_id && !!errors.book_id}
-            >
-              <MenuItem value="">
-                <em>Select a book</em>
-              </MenuItem>
-              {books.map((book) => (
-                <MenuItem key={book.id} value={book.id}>
-                  {book.title} by {book.author}
+          {/* Book Dropdown - only show when book is not provided */}
+          {!book && (
+            <FormControl fullWidth disabled={loadingOptions}>
+              <InputLabel id="book-select-label">Book</InputLabel>
+              <Select
+                labelId="book-select-label"
+                id="book-select"
+                name="book_id"
+                value={formData.book_id}
+                onChange={handleInputChange}
+                onBlur={handleBlur}
+                label="Book"
+                error={touched.book_id && !!errors.book_id}
+              >
+                <MenuItem value="">
+                  <em>Select a book</em>
                 </MenuItem>
-              ))}
-            </Select>
-            {touched.book_id && errors.book_id && (
-              <Typography variant="caption" color="error">
-                {errors.book_id}
-              </Typography>
-            )}
-          </FormControl>
+                {books.map((book) => (
+                  <MenuItem key={book.id} value={book.id}>
+                    {book.title}
+                  </MenuItem>
+                ))}
+              </Select>
+              {touched.book_id && errors.book_id && (
+                <Typography variant="caption" color="error">
+                  {errors.book_id}
+                </Typography>
+              )}
+            </FormControl>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>

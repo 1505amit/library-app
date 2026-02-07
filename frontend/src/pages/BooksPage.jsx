@@ -4,17 +4,22 @@ import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import BookFormModal from "../components/BookFormModal";
+import BorrowFormModal from "../components/BorrowFormModal";
 import { useDataFetch } from "../hooks/useDataFetch";
 import { getBooks, createBook, updateBook } from "../api/books";
+import { borrowBook } from "../api/borrow";
 
 const BooksPage = () => {
   const { data: books, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
     useDataFetch(getBooks);
-  
+
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
+  const [openBorrowModal, setOpenBorrowModal] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
+  const [selectedBookForBorrow, setSelectedBookForBorrow] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBorrowSubmitting, setIsBorrowSubmitting] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [openNotification, setOpenNotification] = useState(false);
   const [notificationType, setNotificationType] = useState("info");
@@ -66,20 +71,20 @@ const BooksPage = () => {
       setIsSubmitting(true);
       try {
         await createBook(formData);
-        
+
         // Close modal
         handleCloseAddModal();
-        
+
         // Refresh the books list
         await refetch();
-        
+
         // Show success notification
         setNotificationMessage("Book added successfully!");
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
         console.error("Error adding book:", err);
-        const errorMessage = 
+        const errorMessage =
           err.response?.data?.detail || "Failed to add book. Please try again.";
         setNotificationMessage(errorMessage);
         setNotificationType("error");
@@ -97,20 +102,20 @@ const BooksPage = () => {
       setIsSubmitting(true);
       try {
         await updateBook(selectedBook.id, formData);
-        
+
         // Close modal
         handleCloseEditModal();
-        
+
         // Refresh the books list
         await refetch();
-        
+
         // Show success notification
         setNotificationMessage("Book updated successfully!");
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
         console.error("Error updating book:", err);
-        const errorMessage = 
+        const errorMessage =
           err.response?.data?.detail || "Failed to update book. Please try again.";
         setNotificationMessage(errorMessage);
         setNotificationType("error");
@@ -122,11 +127,48 @@ const BooksPage = () => {
     [selectedBook, handleCloseEditModal, refetch]
   );
 
-  // Handle borrow action
+  // Handle borrow action - open modal
   const handleBorrow = useCallback((book) => {
-    console.log(`Borrowing book: ${book.title}`);
-    // TODO: integrate with borrow API
+    setSelectedBookForBorrow(book);
+    setOpenBorrowModal(true);
   }, []);
+
+  // Close borrow modal
+  const handleCloseBorrowModal = useCallback(() => {
+    setOpenBorrowModal(false);
+    setSelectedBookForBorrow(null);
+  }, []);
+
+  // Handle borrow submission
+  const handleBorrowSubmit = useCallback(
+    async (borrowData) => {
+      setIsBorrowSubmitting(true);
+      try {
+        await borrowBook(borrowData);
+
+        // Close modal
+        handleCloseBorrowModal();
+
+        // Refresh the books list
+        await refetch();
+
+        // Show success notification
+        setNotificationMessage("Book borrowed successfully!");
+        setNotificationType("success");
+        setOpenNotification(true);
+      } catch (err) {
+        console.error("Error borrowing book:", err);
+        const errorMessage =
+          err.response?.data?.detail || "Failed to borrow book. Please try again.";
+        setNotificationMessage(errorMessage);
+        setNotificationType("error");
+        setOpenNotification(true);
+      } finally {
+        setIsBorrowSubmitting(false);
+      }
+    },
+    [refetch, handleCloseBorrowModal]
+  );
 
   const actions = [
     {
@@ -204,6 +246,15 @@ const BooksPage = () => {
           onSubmit={handleUpdateBook}
           isLoading={isSubmitting}
           editData={selectedBook}
+        />
+
+        {/* Borrow Form Modal */}
+        <BorrowFormModal
+          open={openBorrowModal}
+          onClose={handleCloseBorrowModal}
+          onSubmit={handleBorrowSubmit}
+          isLoading={isBorrowSubmitting}
+          book={selectedBookForBorrow}
         />
       </Box>
     </Container>

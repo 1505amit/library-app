@@ -33,12 +33,12 @@ const BorrowPage = () => {
     try {
       setBorrowLoading(true);
       await borrowBook(borrowData);
-      
+
       // Success
       setSuccessMessage("Book borrowed successfully!");
       setOpenSuccessSnackbar(true);
       setOpenBorrowModal(false);
-      
+
       // Reload borrow records
       await refetch();
     } catch (error) {
