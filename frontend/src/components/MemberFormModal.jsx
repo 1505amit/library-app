@@ -30,6 +30,7 @@ const MemberFormModal = ({
   onClose,
   onSubmit,
   isLoading = false,
+  editData = null,
 }) => {
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [errors, setErrors] = useState(INITIAL_ERRORS);
@@ -38,12 +39,54 @@ const MemberFormModal = ({
   // Initialize form when modal opens
   useEffect(() => {
     if (open) {
-      // Reset form for adding new member
-      setFormData({ ...INITIAL_FORM_STATE });
-      setErrors(INITIAL_ERRORS);
-      setTouched({});
+      if (editData) {
+        // For edit mode, populate form with existing data
+        const initialData = {
+          name: editData.name,
+          email: editData.email,
+          phone: editData.phone || "",
+          active: editData.active,
+        };
+        setFormData(initialData);
+
+        // Validate existing data in edit mode
+        let initialErrors = { ...INITIAL_ERRORS };
+        const newTouched = {};
+
+        // Validate name
+        if (!initialData.name.trim()) {
+          initialErrors.name = "Name is required";
+          newTouched.name = true;
+        } else if (initialData.name.trim().length < 2) {
+          initialErrors.name = "Name must be at least 2 characters long";
+          newTouched.name = true;
+        }
+
+        // Validate email
+        if (!initialData.email.trim()) {
+          initialErrors.email = "Email is required";
+          newTouched.email = true;
+        } else if (!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/).test(initialData.email.trim())) {
+          initialErrors.email = "Please enter a valid email address";
+          newTouched.email = true;
+        }
+
+        // Validate phone
+        if (initialData.phone && (!/^[\d\s\-\+\(\)]+$/.test(initialData.phone) || initialData.phone.length < 10)) {
+          initialErrors.phone = "Phone must be at least 10 characters and contain only digits, spaces, or +() -";
+          newTouched.phone = true;
+        }
+
+        setErrors(initialErrors);
+        setTouched(newTouched);
+      } else {
+        // For add mode, reset to initial state
+        setFormData({ ...INITIAL_FORM_STATE });
+        setErrors(INITIAL_ERRORS);
+        setTouched({});
+      }
     }
-  }, [open]);
+  }, [open, editData]);
 
   // Email validation helper
   const isValidEmail = useCallback((email) => {
@@ -202,6 +245,10 @@ const MemberFormModal = ({
     onClose();
   }, [onClose]);
 
+  const isEditMode = !!editData;
+  const title = isEditMode ? "Edit Member" : "Add New Member";
+  const submitButtonText = isEditMode ? "Update Member" : "Add Member";
+
   return (
     <Dialog
       open={open}
@@ -214,7 +261,7 @@ const MemberFormModal = ({
         },
       }}
     >
-      <DialogTitle sx={{ fontWeight: 600 }}>Add New Member</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 600 }}>{title}</DialogTitle>
       <DialogContent sx={{ pt: 3 }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {/* Name Field */}
@@ -273,18 +320,20 @@ const MemberFormModal = ({
             }}
           />
 
-          {/* Active Status */}
-          <FormControlLabel
-            control={
-              <Checkbox
-                name="active"
-                checked={formData.active}
-                onChange={handleInputChange}
-                disabled={isLoading}
-              />
-            }
-            label="Active Member"
-          />
+          {/* Active Status - Only show in edit mode */}
+          {isEditMode && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  name="active"
+                  checked={formData.active}
+                  onChange={handleInputChange}
+                  disabled={isLoading}
+                />
+              }
+              label="Active Member"
+            />
+          )}
         </Box>
       </DialogContent>
       <DialogActions sx={{ p: 2, gap: 1 }}>
@@ -303,7 +352,7 @@ const MemberFormModal = ({
           }}
         >
           {isLoading && <CircularProgress size={20} />}
-          {isLoading ? "Adding..." : "Add Member"}
+          {isLoading ? `${isEditMode ? "Updating" : "Adding"}...` : submitButtonText}
         </Button>
       </DialogActions>
     </Dialog>
