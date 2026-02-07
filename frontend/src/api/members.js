@@ -10,3 +10,14 @@ export const getMembers = async () => {
     throw error;
   }
 };
+
+// Create a new member
+export const createMember = async (memberData) => {
+  try {
+    const response = await api.post("/members/", memberData);
+    return response.data;
+  } catch (error) {
+    console.error("Error creating member:", error);
+    throw error;
+  }
+};
