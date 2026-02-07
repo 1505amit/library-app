@@ -132,7 +132,7 @@ const MembersPage = () => {
 
   return (
     <Container maxWidth="lg">
-      <Box sx={{ mt: 4 }}>
+      <Box sx={{ mt: 4, pb: 10 }}>
         <Box
           sx={{
             display: "flex",

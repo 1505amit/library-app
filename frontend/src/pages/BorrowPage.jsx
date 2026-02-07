@@ -44,7 +44,7 @@ const BorrowPage = () => {
       await borrowBook(borrowData);
 
       // Success
-      setSuccessMessage("Book borrowed successfully!");
+      setSuccessMessage("Borrow record created successfully!");
       setOpenSuccessSnackbar(true);
       setOpenBorrowModal(false);
 
@@ -52,10 +52,10 @@ const BorrowPage = () => {
       await refetch();
     } catch (error) {
       const errorMsg =
-        error.response?.data?.detail || "Failed to borrow book. Please try again.";
+        error.response?.data?.detail || "Failed to create borrow record. Please try again.";
       setBorrowError(errorMsg);
       setOpenErrorSnackbar(true);
-      console.error("Error borrowing book:", error);
+      console.error("Error creating borrow record:", error);
     } finally {
       setBorrowLoading(false);
     }
@@ -127,17 +127,17 @@ const BorrowPage = () => {
 
   return (
     <Container maxWidth="lg">
-      <Box sx={{ mt: 4 }}>
+      <Box sx={{ mt: 4, pb: 10 }}>
         {/* Heading with Borrow Button */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
           <Typography variant="h4">
-            Borrowed Books
+            Borrow Records
           </Typography>
           <Button
             variant="contained"
             onClick={() => setOpenBorrowModal(true)}
           >
-            Borrow a Book
+            Create Borrow Record
           </Button>
         </Box>
 

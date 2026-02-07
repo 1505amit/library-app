@@ -31,7 +31,7 @@ const BooksPage = () => {
     { field: "published_year", headerName: "Year" },
     {
       field: "available",
-      headerName: "Available",
+      headerName: "Status",
       render: (value) => (
         <Chip
           label={value ? "Available" : "Not Available"}
@@ -186,7 +186,7 @@ const BooksPage = () => {
 
   return (
     <Container maxWidth="lg">
-      <Box sx={{ mt: 4 }}>
+      <Box sx={{ mt: 4, pb: 10 }}>
         <Box
           sx={{
             display: "flex",
