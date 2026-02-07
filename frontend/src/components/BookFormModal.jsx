@@ -27,6 +27,7 @@ const BookFormModal = ({
   onClose,
   onSubmit,
   isLoading = false,
+  editData = null,
 }) => {
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [errors, setErrors] = useState(INITIAL_ERRORS);
@@ -35,11 +36,21 @@ const BookFormModal = ({
   // Initialize form when modal opens
   useEffect(() => {
     if (open) {
-      setFormData({ ...INITIAL_FORM_STATE });
+      if (editData) {
+        // For edit mode, populate form with existing data
+        setFormData({
+          title: editData.title,
+          author: editData.author,
+          published_year: editData.published_year,
+        });
+      } else {
+        // For add mode, reset to initial state
+        setFormData({ ...INITIAL_FORM_STATE });
+      }
       setErrors(INITIAL_ERRORS);
       setTouched({});
     }
-  }, [open]);
+  }, [open, editData]);
 
   // Validate form field
   const validateField = useCallback((name, value) => {
@@ -195,7 +206,8 @@ const BookFormModal = ({
     onClose();
   }, [onClose]);
 
-  const title = "Add New Book";
+  const isEditMode = !!editData;
+  const title = isEditMode ? "Edit Book" : "Add New Book";
 
   return (
     <Dialog
@@ -288,10 +300,10 @@ const BookFormModal = ({
           {isLoading ? (
             <>
               <CircularProgress size={20} sx={{ mr: 1 }} />
-              Adding...
+              {isEditMode ? "Updating..." : "Adding..."}
             </>
           ) : (
-            "Add Book"
+            isEditMode ? "Update Book" : "Add Book"
           )}
         </Button>
       </DialogActions>
