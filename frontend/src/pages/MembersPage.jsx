@@ -5,13 +5,15 @@ import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import MemberFormModal from "../components/MemberFormModal";
 import { useDataFetch } from "../hooks/useDataFetch";
-import { getMembers, createMember } from "../api/members";
+import { getMembers, createMember, updateMember } from "../api/members";
 
 const MembersPage = () => {
   const { data: members, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
     useDataFetch(getMembers);
   
   const [openAddModal, setOpenAddModal] = useState(false);
+  const [openEditModal, setOpenEditModal] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [openNotification, setOpenNotification] = useState(false);
@@ -46,6 +48,18 @@ const MembersPage = () => {
     setOpenAddModal(false);
   }, []);
 
+  // Open edit member modal
+  const handleOpenEditModal = useCallback((member) => {
+    setSelectedMember(member);
+    setOpenEditModal(true);
+  }, []);
+
+  // Close edit member modal
+  const handleCloseEditModal = useCallback(() => {
+    setOpenEditModal(false);
+    setSelectedMember(null);
+  }, []);
+
   // Handle form submission for adding member
   const handleAddMember = useCallback(
     async (formData) => {
@@ -77,6 +91,45 @@ const MembersPage = () => {
     [handleCloseAddModal, refetch]
   );
 
+  // Handle form submission for updating member
+  const handleUpdateMember = useCallback(
+    async (formData) => {
+      setIsSubmitting(true);
+      try {
+        await updateMember(selectedMember.id, formData);
+        
+        // Close modal
+        handleCloseEditModal();
+        
+        // Refresh the members list
+        await refetch();
+        
+        // Show success notification
+        setNotificationMessage("Member updated successfully!");
+        setNotificationType("success");
+        setOpenNotification(true);
+      } catch (err) {
+        console.error("Error updating member:", err);
+        const errorMessage = 
+          err.response?.data?.detail || "Failed to update member. Please try again.";
+        setNotificationMessage(errorMessage);
+        setNotificationType("error");
+        setOpenNotification(true);
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [selectedMember, handleCloseEditModal, refetch]
+  );
+
+  const actions = [
+    {
+      label: "Edit",
+      handler: handleOpenEditModal,
+      color: "warning",
+    },
+  ];
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4 }}>
@@ -106,6 +159,7 @@ const MembersPage = () => {
           <DataTable
             columns={columns}
             rows={members}
+            actions={actions}
           />
         </PageStateHandler>
 
@@ -129,6 +183,15 @@ const MembersPage = () => {
           onClose={handleCloseAddModal}
           onSubmit={handleAddMember}
           isLoading={isSubmitting}
+        />
+
+        {/* Member Form Modal for Edit */}
+        <MemberFormModal
+          open={openEditModal}
+          onClose={handleCloseEditModal}
+          onSubmit={handleUpdateMember}
+          isLoading={isSubmitting}
+          editData={selectedMember}
         />
       </Box>
     </Container>
