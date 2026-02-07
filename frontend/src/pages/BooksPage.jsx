@@ -5,13 +5,15 @@ import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import BookFormModal from "../components/BookFormModal";
 import { useDataFetch } from "../hooks/useDataFetch";
-import { getBooks, createBook } from "../api/books";
+import { getBooks, createBook, updateBook } from "../api/books";
 
 const BooksPage = () => {
   const { data: books, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
     useDataFetch(getBooks);
   
   const [openAddModal, setOpenAddModal] = useState(false);
+  const [openEditModal, setOpenEditModal] = useState(false);
+  const [selectedBook, setSelectedBook] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [openNotification, setOpenNotification] = useState(false);
@@ -46,6 +48,18 @@ const BooksPage = () => {
     setOpenAddModal(false);
   }, []);
 
+  // Open edit book modal
+  const handleOpenEditModal = useCallback((book) => {
+    setSelectedBook(book);
+    setOpenEditModal(true);
+  }, []);
+
+  // Close edit book modal
+  const handleCloseEditModal = useCallback(() => {
+    setOpenEditModal(false);
+    setSelectedBook(null);
+  }, []);
+
   // Handle form submission for adding book
   const handleAddBook = useCallback(
     async (formData) => {
@@ -77,11 +91,56 @@ const BooksPage = () => {
     [handleCloseAddModal, refetch]
   );
 
+  // Handle form submission for updating book
+  const handleUpdateBook = useCallback(
+    async (formData) => {
+      setIsSubmitting(true);
+      try {
+        await updateBook(selectedBook.id, formData);
+        
+        // Close modal
+        handleCloseEditModal();
+        
+        // Refresh the books list
+        await refetch();
+        
+        // Show success notification
+        setNotificationMessage("Book updated successfully!");
+        setNotificationType("success");
+        setOpenNotification(true);
+      } catch (err) {
+        console.error("Error updating book:", err);
+        const errorMessage = 
+          err.response?.data?.detail || "Failed to update book. Please try again.";
+        setNotificationMessage(errorMessage);
+        setNotificationType("error");
+        setOpenNotification(true);
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [selectedBook, handleCloseEditModal, refetch]
+  );
+
   // Handle borrow action
   const handleBorrow = useCallback((book) => {
     console.log(`Borrowing book: ${book.title}`);
     // TODO: integrate with borrow API
   }, []);
+
+  const actions = [
+    {
+      label: "Edit",
+      handler: handleOpenEditModal,
+      color: "warning",
+    },
+    {
+      label: "Borrow",
+      handler: handleBorrow,
+      disabled: (row) => !row.available,
+      color: "primary",
+    },
+  ];
 
   return (
     <Container maxWidth="lg">
@@ -112,11 +171,7 @@ const BooksPage = () => {
           <DataTable
             columns={columns}
             rows={books}
-            onAction={{
-              label: "Borrow",
-              handler: handleBorrow,
-              disabled: (row) => !row.available,
-            }}
+            actions={actions}
           />
         </PageStateHandler>
 
@@ -140,6 +195,15 @@ const BooksPage = () => {
           onClose={handleCloseAddModal}
           onSubmit={handleAddBook}
           isLoading={isSubmitting}
+        />
+
+        {/* Book Form Modal for Edit */}
+        <BookFormModal
+          open={openEditModal}
+          onClose={handleCloseEditModal}
+          onSubmit={handleUpdateBook}
+          isLoading={isSubmitting}
+          editData={selectedBook}
         />
       </Box>
     </Container>

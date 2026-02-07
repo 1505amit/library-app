@@ -6,10 +6,16 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Button
+  Button,
+  Box
 } from "@mui/material";
 
-const DataTable = ({ columns, rows, onAction }) => {
+const DataTable = ({ columns, rows, onAction, actions = [] }) => {
+  // Support both single action (legacy) and multiple actions
+  const actionList = onAction 
+    ? [{ label: onAction.label, handler: onAction.handler, disabled: onAction.disabled, color: "primary" }]
+    : actions;
+
   return (
     <TableContainer component={Paper}>
       <Table>
@@ -18,7 +24,7 @@ const DataTable = ({ columns, rows, onAction }) => {
             {columns.map((col) => (
               <TableCell key={col.field}>{col.headerName}</TableCell>
             ))}
-            {onAction && <TableCell>Action</TableCell>}
+            {actionList.length > 0 && <TableCell>Actions</TableCell>}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -32,17 +38,22 @@ const DataTable = ({ columns, rows, onAction }) => {
                   </TableCell>
                 );
               })}
-              {onAction && (
+              {actionList.length > 0 && (
                 <TableCell>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    size="small"
-                    onClick={() => onAction.handler(row)}
-                    disabled={onAction.disabled ? onAction.disabled(row) : false}
-                  >
-                    {onAction.label || "Action"}
-                  </Button>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    {actionList.map((action, index) => (
+                      <Button
+                        key={index}
+                        variant="contained"
+                        color={action.color || "primary"}
+                        size="small"
+                        onClick={() => action.handler(row)}
+                        disabled={action.disabled ? action.disabled(row) : false}
+                      >
+                        {action.label}
+                      </Button>
+                    ))}
+                  </Box>
                 </TableCell>
               )}
             </TableRow>

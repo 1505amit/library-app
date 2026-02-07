@@ -21,3 +21,14 @@ export const createBook = async (bookData) => {
     throw error;
   }
 };
+
+// Update an existing book
+export const updateBook = async (bookId, bookData) => {
+  try {
+    const response = await api.put(`/books/${bookId}`, bookData);
+    return response.data;
+  } catch (error) {
+    console.error("Error updating book:", error);
+    throw error;
+  }
+};
