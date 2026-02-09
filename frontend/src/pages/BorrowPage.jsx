@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Container,
   Typography,
@@ -10,6 +10,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid,
 } from "@mui/material";
 import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
@@ -17,12 +22,22 @@ import Notification from "../components/Notification";
 import BorrowFormModal from "../components/BorrowFormModal";
 import { useDataFetch } from "../hooks/useDataFetch";
 import { getBorrows, borrowBook, returnBook } from "../api/borrow";
+import { getBooks } from "../api/books";
+import { getMembers } from "../api/members";
 import { formatDateTime } from "../utils/dateFormatter";
 
 const BorrowPage = () => {
   const [includeReturned, setIncludeReturned] = useState(true);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [selectedBookId, setSelectedBookId] = useState("");
+  
+  // Data for filter dropdowns
+  const [books, setBooks] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [loadingFilters, setLoadingFilters] = useState(true);
+
   const { data: borrows, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
-    useDataFetch(() => getBorrows(includeReturned), [includeReturned]);
+    useDataFetch(() => getBorrows(includeReturned, selectedMemberId || null, selectedBookId || null), [includeReturned, selectedMemberId, selectedBookId]);
 
   // Modal and borrow states
   const [openBorrowModal, setOpenBorrowModal] = useState(false);
@@ -36,6 +51,41 @@ const BorrowPage = () => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [selectedBorrow, setSelectedBorrow] = useState(null);
   const [returnLoading, setReturnLoading] = useState(false);
+
+  // Fetch books and members for filter dropdowns
+  useEffect(() => {
+    const fetchFilterData = async () => {
+      try {
+        setLoadingFilters(true);
+        const [booksData, membersData] = await Promise.all([
+          getBooks(),
+          getMembers()
+        ]);
+        setBooks(booksData);
+        setMembers(membersData);
+      } catch (error) {
+        console.error("Error fetching filter data:", error);
+      } finally {
+        setLoadingFilters(false);
+      }
+    };
+
+    fetchFilterData();
+  }, []);
+
+  // Handle filter changes
+  const handleMemberFilterChange = (event) => {
+    setSelectedMemberId(event.target.value);
+  };
+
+  const handleBookFilterChange = (event) => {
+    setSelectedBookId(event.target.value);
+  };
+
+  const clearFilters = () => {
+    setSelectedMemberId("");
+    setSelectedBookId("");
+  };
 
   // Handle borrow submission from modal
   const handleBorrow = async (borrowData) => {
@@ -142,16 +192,77 @@ const BorrowPage = () => {
         </Box>
 
         {/* Filter Section */}
-        <Box sx={{ mb: 3 }}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeReturned}
-                onChange={(e) => setIncludeReturned(e.target.checked)}
+        <Box sx={{ mb: 3, p: 2, border: 1, borderColor: 'grey.300', borderRadius: 1 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Filters</Typography>
+          
+          <Grid container spacing={2} alignItems="center">
+            {/* Include Returned Checkbox */}
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeReturned}
+                    onChange={(e) => setIncludeReturned(e.target.checked)}
+                  />
+                }
+                label="Returned Books"
               />
-            }
-            label="Include Returned Books"
-          />
+            </Grid>
+
+            {/* Member Filter */}
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="member-filter-label">Filter by Member</InputLabel>
+                <Select
+                  labelId="member-filter-label"
+                  value={selectedMemberId}
+                  label="Filter by Member"
+                  onChange={handleMemberFilterChange}
+                  disabled={loadingFilters}
+                >
+                  <MenuItem value="">All Members</MenuItem>
+                  {members.map((member) => (
+                    <MenuItem key={member.id} value={member.id}>
+                      {member.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Book Filter */}
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="book-filter-label">Filter by Book</InputLabel>
+                <Select
+                  labelId="book-filter-label"
+                  value={selectedBookId}
+                  label="Filter by Book"
+                  onChange={handleBookFilterChange}
+                  disabled={loadingFilters}
+                >
+                  <MenuItem value="">All Books</MenuItem>
+                  {books.map((book) => (
+                    <MenuItem key={book.id} value={book.id}>
+                      {book.title}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Clear Filters Button */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Button
+                variant="outlined"
+                onClick={clearFilters}
+                disabled={!selectedMemberId && !selectedBookId}
+                size="small"
+              >
+                Clear Filters
+              </Button>
+            </Grid>
+          </Grid>
         </Box>
 
         <PageStateHandler

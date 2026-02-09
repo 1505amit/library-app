@@ -1,12 +1,22 @@
 import api from "./index";
 
-// Fetch all borrow records with optional filter
-export const getBorrows = async (includeReturned = true) => {
+// Fetch all borrow records with optional filters
+export const getBorrows = async (includeReturned = true, memberId = null, bookId = null) => {
   try {
+    const params = {
+      returned: includeReturned,
+    };
+    
+    if (memberId) {
+      params.member_id = memberId;
+    }
+    
+    if (bookId) {
+      params.book_id = bookId;
+    }
+    
     const response = await api.get("/borrow/", {
-      params: {
-        include_returned: includeReturned,
-      },
+      params,
     });
     return response.data;
   } catch (error) {
