@@ -27,9 +27,13 @@ class BorrowService:
             logger.error(f"Unexpected error in borrow_book: {str(e)}")
             raise
 
-    def get_all_borrows(self, include_returned: bool = True):
+    def get_all_borrows(self, returned: bool = True, member_id: int = None, book_id: int = None):
         try:
-            return self.borrow_repository.get_all_borrows(include_returned=include_returned)
+            return self.borrow_repository.get_all_borrows(
+                returned=returned,
+                member_id=member_id,
+                book_id=book_id
+            )
         except SQLAlchemyError as e:
             logger.error(f"Database error in get_all_borrows: {str(e)}")
             raise ValueError("Failed to retrieve borrow records from database")
