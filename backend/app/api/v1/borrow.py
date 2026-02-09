@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.common.database import get_db
 from datetime import datetime
 import logging
-from typing import List
+from typing import List, Optional
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -24,21 +24,29 @@ def get_borrow_service(db: Session = Depends(get_db)) -> BorrowService:
 
 @router.get("/", response_model=List[BorrowDetailedResponse])
 def get_all_borrows(
-    include_returned: bool = True,
+    returned: bool = True,
+    member_id: Optional[int] = None,
+    book_id: Optional[int] = None,
     service: BorrowService = Depends(get_borrow_service)
 ):
     """
-    Get borrowed books with optional filtering for returned books.
+    Get borrowed books with optional filtering.
 
     Query Parameters:
-    - **include_returned** (bool, default: True): Include returned books in the response.
+    - **returned** (bool, default: True): Include returned books in the response.
       - If True: Returns all borrow records (active and returned)
       - If False: Returns only active borrow records (not yet returned)
+    - **member_id** (int, optional): Filter borrow records by member ID
+    - **book_id** (int, optional): Filter borrow records by book ID
 
     Returns a list of borrow records with their book and member details.
     """
     try:
-        return service.get_all_borrows(include_returned=include_returned)
+        return service.get_all_borrows(
+            returned=returned,
+            member_id=member_id,
+            book_id=book_id
+        )
     except ValueError as e:
         logger.warning(f"Validation error retrieving borrow records: {str(e)}")
         raise HTTPException(

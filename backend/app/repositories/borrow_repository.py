@@ -59,13 +59,21 @@ class BorrowRepository:
             logger.error(f"Unexpected error in create_borrow: {str(e)}")
             raise
 
-    def get_all_borrows(self, include_returned: bool = True):
+    def get_all_borrows(self, returned: bool = True, member_id: int = None, book_id: int = None):
         try:
             query = self.db.query(BorrowRecord)
 
-            # Filter out returned books if include_returned is False
-            if not include_returned:
+            # Filter out returned books if returned is False
+            if not returned:
                 query = query.filter(BorrowRecord.returned_at.is_(None))
+
+            # Filter by member_id if provided
+            if member_id is not None:
+                query = query.filter(BorrowRecord.member_id == member_id)
+
+            # Filter by book_id if provided
+            if book_id is not None:
+                query = query.filter(BorrowRecord.book_id == book_id)
 
             borrow_records = query.all()
             return borrow_records

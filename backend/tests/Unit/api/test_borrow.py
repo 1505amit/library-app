@@ -196,8 +196,8 @@ def test_borrow_book_database_error(client):
 
 
 # Test get_all_borrows endpoint
-def test_get_all_borrows_default_include_returned(client, mock_borrow_detailed_response, mock_returned_borrow_response):
-    """Test getting all borrows with include_returned=True (default)."""
+def test_get_all_borrows_default_returned(client, mock_borrow_detailed_response, mock_returned_borrow_response):
+    """Test getting all borrows with returned=True (default)."""
     mock_service = MagicMock(spec=BorrowService)
     mock_service.get_all_borrows.return_value = [
         mock_borrow_detailed_response,
@@ -214,11 +214,12 @@ def test_get_all_borrows_default_include_returned(client, mock_borrow_detailed_r
     assert data[0]["returned_at"] is None
     assert data[1]["id"] == 2
     assert data[1]["returned_at"] is not None
-    mock_service.get_all_borrows.assert_called_once_with(include_returned=True)
+    mock_service.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=None, book_id=None)
 
 
-def test_get_all_borrows_with_include_returned_true(client, mock_borrow_detailed_response, mock_returned_borrow_response):
-    """Test getting all borrows with include_returned=True explicitly."""
+def test_get_all_borrows_with_returned_true(client, mock_borrow_detailed_response, mock_returned_borrow_response):
+    """Test getting all borrows with returned=True explicitly."""
     mock_service = MagicMock(spec=BorrowService)
     mock_service.get_all_borrows.return_value = [
         mock_borrow_detailed_response,
@@ -226,23 +227,24 @@ def test_get_all_borrows_with_include_returned_true(client, mock_borrow_detailed
     ]
     app.dependency_overrides[get_borrow_service] = lambda: mock_service
 
-    response = client.get("/api/v1/borrow/?include_returned=true")
+    response = client.get("/api/v1/borrow/?returned=true")
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert len(data) == 2
-    mock_service.get_all_borrows.assert_called_once_with(include_returned=True)
+    mock_service.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=None, book_id=None)
 
 
-def test_get_all_borrows_with_include_returned_false(client, mock_borrow_detailed_response):
-    """Test getting only active borrows with include_returned=False."""
+def test_get_all_borrows_with_returned_false(client, mock_borrow_detailed_response):
+    """Test getting only active borrows with returned=False."""
     mock_service = MagicMock(spec=BorrowService)
     mock_service.get_all_borrows.return_value = [
         mock_borrow_detailed_response
     ]
     app.dependency_overrides[get_borrow_service] = lambda: mock_service
 
-    response = client.get("/api/v1/borrow/?include_returned=false")
+    response = client.get("/api/v1/borrow/?returned=false")
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -250,7 +252,7 @@ def test_get_all_borrows_with_include_returned_false(client, mock_borrow_detaile
     assert data[0]["id"] == 1
     assert data[0]["returned_at"] is None
     mock_service.get_all_borrows.assert_called_once_with(
-        include_returned=False)
+        returned=False, member_id=None, book_id=None)
 
 
 def test_get_all_borrows_empty_list(client):
@@ -264,7 +266,8 @@ def test_get_all_borrows_empty_list(client):
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert len(data) == 0
-    mock_service.get_all_borrows.assert_called_once_with(include_returned=True)
+    mock_service.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=None, book_id=None)
 
 
 def test_get_all_borrows_validation_error(client):
@@ -361,3 +364,68 @@ def test_return_book_database_error(client):
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "Failed to return book" in response.json()["detail"]
+
+
+def test_get_all_borrows_with_member_filter(client, mock_borrow_detailed_response):
+    """Test getting borrows filtered by member_id."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.return_value = [mock_borrow_detailed_response]
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/?member_id=123")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 1
+    mock_service.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=123, book_id=None
+    )
+
+
+def test_get_all_borrows_with_book_filter(client, mock_borrow_detailed_response):
+    """Test getting borrows filtered by book_id."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.return_value = [mock_borrow_detailed_response]
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/?book_id=456")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 1
+    mock_service.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=None, book_id=456
+    )
+
+
+def test_get_all_borrows_with_both_filters(client, mock_borrow_detailed_response):
+    """Test getting borrows filtered by both member_id and book_id."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.return_value = [mock_borrow_detailed_response]
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get("/api/v1/borrow/?member_id=123&book_id=456")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 1
+    mock_service.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=123, book_id=456
+    )
+
+
+def test_get_all_borrows_with_all_filters(client, mock_borrow_detailed_response):
+    """Test getting borrows with all filters combined."""
+    mock_service = MagicMock(spec=BorrowService)
+    mock_service.get_all_borrows.return_value = [mock_borrow_detailed_response]
+    app.dependency_overrides[get_borrow_service] = lambda: mock_service
+
+    response = client.get(
+        "/api/v1/borrow/?returned=false&member_id=123&book_id=456")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 1
+    mock_service.get_all_borrows.assert_called_once_with(
+        returned=False, member_id=123, book_id=456
+    )

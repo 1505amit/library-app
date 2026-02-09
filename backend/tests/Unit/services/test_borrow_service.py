@@ -103,7 +103,7 @@ def test_borrow_book_unexpected_error(borrow_service, borrow_base):
 
 
 def test_get_all_borrows_success_with_all_records(borrow_service):
-    """Test get_all_borrows returns all records when include_returned=True."""
+    """Test get_all_borrows returns all records when returned=True."""
     mock_active_borrow = MagicMock(spec=BorrowRecord)
     mock_active_borrow.id = 1
     mock_active_borrow.returned_at = None
@@ -116,18 +116,18 @@ def test_get_all_borrows_success_with_all_records(borrow_service):
         return_value=[mock_active_borrow, mock_returned_borrow]
     )
 
-    result = borrow_service.get_all_borrows(include_returned=True)
+    result = borrow_service.get_all_borrows(returned=True)
 
     assert len(result) == 2
     assert result[0].id == 1
     assert result[1].id == 2
     borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        include_returned=True
+        returned=True, member_id=None, book_id=None
     )
 
 
 def test_get_all_borrows_success_active_only(borrow_service):
-    """Test get_all_borrows returns only active records when include_returned=False."""
+    """Test get_all_borrows returns only active records when returned=False."""
     mock_active_borrow = MagicMock(spec=BorrowRecord)
     mock_active_borrow.id = 1
     mock_active_borrow.returned_at = None
@@ -136,12 +136,12 @@ def test_get_all_borrows_success_active_only(borrow_service):
         return_value=[mock_active_borrow]
     )
 
-    result = borrow_service.get_all_borrows(include_returned=False)
+    result = borrow_service.get_all_borrows(returned=False)
 
     assert len(result) == 1
     assert result[0].id == 1
     borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        include_returned=False
+        returned=False, member_id=None, book_id=None
     )
 
 
@@ -151,11 +151,11 @@ def test_get_all_borrows_empty_list(borrow_service):
         return_value=[]
     )
 
-    result = borrow_service.get_all_borrows(include_returned=True)
+    result = borrow_service.get_all_borrows(returned=True)
 
     assert len(result) == 0
     borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        include_returned=True
+        returned=True, member_id=None, book_id=None
     )
 
 
@@ -166,7 +166,7 @@ def test_get_all_borrows_database_error(borrow_service):
     )
 
     with pytest.raises(ValueError) as exc_info:
-        borrow_service.get_all_borrows(include_returned=True)
+        borrow_service.get_all_borrows(returned=True)
     assert "Failed to retrieve borrow records from database" in str(
         exc_info.value)
 
@@ -178,7 +178,66 @@ def test_get_all_borrows_unexpected_error(borrow_service):
     )
 
     with pytest.raises(Exception):
-        borrow_service.get_all_borrows(include_returned=True)
+        borrow_service.get_all_borrows(returned=True)
+
+
+def test_get_all_borrows_with_member_filter(borrow_service):
+    """Test get_all_borrows with member_id filter."""
+    mock_borrow = MagicMock(spec=BorrowRecord)
+    mock_borrow.id = 1
+    mock_borrow.member_id = 123
+
+    borrow_service.borrow_repository.get_all_borrows = MagicMock(
+        return_value=[mock_borrow]
+    )
+
+    result = borrow_service.get_all_borrows(member_id=123)
+
+    assert len(result) == 1
+    assert result[0].member_id == 123
+    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=123, book_id=None
+    )
+
+
+def test_get_all_borrows_with_book_filter(borrow_service):
+    """Test get_all_borrows with book_id filter."""
+    mock_borrow = MagicMock(spec=BorrowRecord)
+    mock_borrow.id = 1
+    mock_borrow.book_id = 456
+
+    borrow_service.borrow_repository.get_all_borrows = MagicMock(
+        return_value=[mock_borrow]
+    )
+
+    result = borrow_service.get_all_borrows(book_id=456)
+
+    assert len(result) == 1
+    assert result[0].book_id == 456
+    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=None, book_id=456
+    )
+
+
+def test_get_all_borrows_with_both_filters(borrow_service):
+    """Test get_all_borrows with both member_id and book_id filters."""
+    mock_borrow = MagicMock(spec=BorrowRecord)
+    mock_borrow.id = 1
+    mock_borrow.member_id = 123
+    mock_borrow.book_id = 456
+
+    borrow_service.borrow_repository.get_all_borrows = MagicMock(
+        return_value=[mock_borrow]
+    )
+
+    result = borrow_service.get_all_borrows(member_id=123, book_id=456)
+
+    assert len(result) == 1
+    assert result[0].member_id == 123
+    assert result[0].book_id == 456
+    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+        returned=True, member_id=123, book_id=456
+    )
 
 # Test return_borrow
 
