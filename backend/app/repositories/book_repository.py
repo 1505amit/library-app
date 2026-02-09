@@ -27,7 +27,7 @@ class BookRepository:
 
     def create_book(self, book: BookBase):
         try:
-            db_book = Book(**book.dict())
+            db_book = Book(**book.model_dump())
             self.db.add(db_book)
             self.db.commit()
             self.db.refresh(db_book)
@@ -57,7 +57,9 @@ class BookRepository:
     def update_book(self, book_id: int, book: BookBase):
         try:
             db_book = self.get_book_by_id(book_id)
-            for key, value in book.dict().items():
+            # Only update fields that were explicitly set in the request
+            update_data = book.model_dump(exclude_unset=True)
+            for key, value in update_data.items():
                 setattr(db_book, key, value)
             self.db.commit()
             self.db.refresh(db_book)
