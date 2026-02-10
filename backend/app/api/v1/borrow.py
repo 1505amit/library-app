@@ -22,7 +22,7 @@ def get_borrow_service(db: Session = Depends(get_db)) -> BorrowService:
         )
 
 
-@router.get("/", response_model=List[BorrowDetailedResponse])
+@router.get("", response_model=List[BorrowDetailedResponse])
 def get_all_borrows(
     returned: bool = True,
     member_id: Optional[int] = None,
@@ -61,7 +61,7 @@ def get_all_borrows(
         )
 
 
-@router.post("/", response_model=BorrowResponse)
+@router.post("", response_model=BorrowResponse)
 def borrow_book(borrow: BorrowRequest, service: BorrowService = Depends(get_borrow_service)):
     """
     Borrow a book for a member.

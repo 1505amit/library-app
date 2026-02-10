@@ -3,7 +3,7 @@ import api from "./index";
 // Fetch all members
 export const getMembers = async () => {
   try {
-    const response = await api.get("/members/");
+    const response = await api.get("/members");
     return response.data;
   } catch (error) {
     console.error("Error fetching members:", error);
@@ -14,7 +14,7 @@ export const getMembers = async () => {
 // Create a new member
 export const createMember = async (memberData) => {
   try {
-    const response = await api.post("/members/", memberData);
+    const response = await api.post("/members", memberData);
     return response.data;
   } catch (error) {
     console.error("Error creating member:", error);
