@@ -20,7 +20,7 @@ def get_book_service(db: Session = Depends(get_db)) -> BookService:
         )
 
 
-@router.get("/", response_model=list[BookResponse])
+@router.get("", response_model=list[BookResponse])
 def get_books(service: BookService = Depends(get_book_service)):
     try:
         return service.get_all_books()
@@ -38,7 +38,7 @@ def get_books(service: BookService = Depends(get_book_service)):
         )
 
 
-@router.post("/", response_model=BookResponse)
+@router.post("", response_model=BookResponse)
 def add_book(book: BookBase, service: BookService = Depends(get_book_service)):
     try:
         return service.create_book(book)

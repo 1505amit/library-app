@@ -2,14 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /code
 
-# Install pipenv
-RUN pip install pipenv
+# Install pip-tools
+RUN pip install --upgrade pip
 
-# Copy Pipfile and Pipfile.lock first for caching
-COPY Pipfile* ./
-
-# Install dependencies system-wide (including dev dependencies for testing)
-RUN pipenv install --system --deploy --dev
+# Copy requirements.txt and install dependencies
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app source
 COPY ./app ./app

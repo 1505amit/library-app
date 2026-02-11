@@ -1,6 +1,6 @@
 # Library Management App
 
-A NeiNeighborhood library management system built with **FastAPI** (Backend) and **React/Vite** (Frontend), containerized with Docker for easy development and deployment.
+A Neighborhood library management system built with **FastAPI** (Backend) and **React/Vite** (Frontend), containerized with Docker for easy development and deployment.
 
 ## Features
 
@@ -79,7 +79,6 @@ make help
 │   └── tests/           # Test suite
 ├── frontend/             # React/Vite application
 │   ├── src/             # React components
-│   └── public/          # Static assets
 ├── docker-compose.yaml  # Docker services configuration
 └── Makefile            # Project commands
 ```

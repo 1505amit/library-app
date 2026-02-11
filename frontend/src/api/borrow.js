@@ -15,7 +15,7 @@ export const getBorrows = async (includeReturned = true, memberId = null, bookId
       params.book_id = bookId;
     }
     
-    const response = await api.get("/borrow/", {
+    const response = await api.get("/borrow", {
       params,
     });
     return response.data;
@@ -28,7 +28,7 @@ export const getBorrows = async (includeReturned = true, memberId = null, bookId
 // Create a borrow record
 export const borrowBook = async (borrowData) => {
   try {
-    const response = await api.post("/borrow/", borrowData);
+    const response = await api.post("/borrow", borrowData);
     return response.data;
   } catch (error) {
     console.error("Error creating borrow record:", error);

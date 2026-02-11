@@ -21,7 +21,7 @@ def get_member_service(db: Session = Depends(get_db)) -> MemberService:
         )
 
 
-@router.post("/", response_model=MemberResponse)
+@router.post("", response_model=MemberResponse)
 def add_member(member: MemberBase, service: MemberService = Depends(get_member_service)):
     try:
         member = service.create_member(member)
@@ -66,7 +66,7 @@ def update_member(member_id: int, member: MemberBase, service: MemberService = D
         )
 
 
-@router.get("/", response_model=list[MemberResponse])
+@router.get("", response_model=list[MemberResponse])
 def list_members(service: MemberService = Depends(get_member_service)):
     try:
         members = service.get_all_members()
