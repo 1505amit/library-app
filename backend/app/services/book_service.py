@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from app.repositories.book_repository import BookRepository
-from sqlalchemy.exc import SQLAlchemyError
+from app.common.exceptions import InvalidBookError, DatabaseError, BookNotFoundError
 from app.schemas.book import BookBase
 import logging
 
@@ -15,33 +15,131 @@ class BookService:
         self.books_repository = BookRepository(db)
 
     def get_all_books(self):
-        try:
-            return self.books_repository.get_all_books()
-        except SQLAlchemyError as e:
-            logger.error(f"Database error in get_all_books: {str(e)}")
-            raise ValueError("Failed to retrieve books from database")
-        except Exception as e:
-            logger.error(f"Unexpected error in get_all_books: {str(e)}")
-            raise
+        """Fetch all books from the database.
+
+        Retrieves a list of all book records currently stored in the database.
+
+        Returns:
+            list[Book]: A list of all Book objects, or an empty list if no books exist.
+
+        Raises:
+            DatabaseError: If the database query fails due to connection or query issues.
+        """
+        logger.info("Retrieving all books")
+        return self.books_repository.get_all_books()
+
+    def get_book_by_id(self, book_id: int):
+        """Fetch a single book by its unique identifier.
+
+        Retrieves a specific book record from the database using its ID.
+        This is a business logic layer that verifies the book exists before returning it.
+
+        Args:
+            book_id (int): The unique identifier of the book to retrieve. Must be a positive integer.
+
+        Returns:
+            Book: The Book object with the specified ID.
+
+        Raises:
+            BookNotFoundError: If no book with the given ID exists in the database.
+            DatabaseError: If the database query fails due to connection or query issues.
+        """
+        logger.info(f"Retrieving book with id {book_id}")
+        book = self.books_repository.get_book_by_id(book_id)
+        if not book:
+            logger.error(f"Book not found with id {book_id}")
+            raise BookNotFoundError(f"Book with id {book_id} not found")
+        return book
 
     def create_book(self, book: BookBase):
-        try:
-            return self.books_repository.create_book(book)
-        except SQLAlchemyError as e:
-            logger.error(f"Database error in create_book: {str(e)}")
-            raise ValueError("Failed to create book in database")
-        except Exception as e:
-            logger.error(f"Unexpected error in create_book: {str(e)}")
-            raise
+        """Create a new book record with business logic validation.
+
+        Validates the input data according to business rules, then persists the new book
+        to the database. Input validation (format, length) is handled by Pydantic in the schema layer.
+
+        Args:
+            book (BookBase): A BookBase schema object containing the book details:
+                - title: The book's title (1-255 characters, required)
+                - author: The book's author (1-255 characters, required)
+                - published_year: Year of publication (1000-2100, optional)
+                - available: Whether the book is available (defaults to True)
+
+        Returns:
+            Book: The newly created Book object with an assigned ID.
+
+        Raises:
+            InvalidBookError: If business logic validation fails (e.g., published_year > 2026).
+            DatabaseError: If the database operation fails due to connection or constraint issues.
+        """
+        logger.info(f"Creating new book: {book.title}")
+
+        # Business logic validation
+        self._validate_book_data(book)
+
+        return self.books_repository.create_book(book)
 
     def update_book(self, book_id: int, book: BookBase):
-        try:
-            return self.books_repository.update_book(book_id, book)
-        except SQLAlchemyError as e:
-            logger.error(f"Database error in update_book: {str(e)}")
-            raise ValueError("Failed to update book in database")
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error in update_book: {str(e)}")
-            raise
+        """Update an existing book record with business logic validation.
+
+        Verifies the book exists, validates the input data according to business rules,
+        then persists the changes to the database. Partial updates are supported - only
+        provided fields are updated.
+
+        Args:
+            book_id (int): The unique identifier of the book to update. Must be a positive integer.
+            book (BookBase): A BookBase schema object containing updated book details:
+                - title: The book's new title (1-255 characters, required)
+                - author: The book's new author (1-255 characters, required)
+                - published_year: Updated publication year (1000-2100, optional)
+                - available: Updated availability status (optional)
+
+        Returns:
+            Book: The updated Book object with all current values.
+
+        Raises:
+            BookNotFoundError: If no book with the given ID exists in the database.
+            InvalidBookError: If business logic validation fails (e.g., published_year > 2026).
+            DatabaseError: If the database operation fails due to connection or constraint issues.
+        """
+        logger.info(f"Updating book with id {book_id}")
+
+        # Verify book exists (service responsibility: business logic)
+        existing_book = self.books_repository.get_book_by_id(book_id)
+        if not existing_book:
+            logger.error(f"Book not found for update: {book_id}")
+            raise BookNotFoundError(f"Book with id {book_id} not found")
+
+        # Business logic validation
+        self._validate_book_data(book)
+
+        # Update (repository only handles data persistence)
+        return self.books_repository.update_book(book_id, book, existing_book)
+
+    def _validate_book_data(self, book: BookBase) -> None:
+        """Validate book data against business rules.
+
+        Performs domain-specific validation that cannot be handled at the schema (Pydantic) level.
+        Schema-level validation (format, length, type) is already handled by Pydantic.
+        This method checks business logic constraints.
+
+        Current validations:
+        - published_year must not be in the future (> 2026)
+
+        Args:
+            book (BookBase): The book data to validate.
+
+        Raises:
+            InvalidBookError: If any business rule validation fails with a descriptive message
+                about which rule was violated.
+
+        Returns:
+            None: Raises an exception if validation fails, returns None if validation passes.
+        """
+        # Validate published_year is not too far in the future
+        if book.published_year:
+            if book.published_year > 2026:
+                raise InvalidBookError(
+                    f"Published year cannot be in the future (provided: {book.published_year})"
+                )
+
+        logger.info(f"Book data validation passed for: {book.title}")
