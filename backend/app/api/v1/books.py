@@ -43,28 +43,6 @@ def get_books(service: BookService = Depends(get_book_service)):
     return service.get_all_books()
 
 
-@router.get("/{book_id}", response_model=BookResponse)
-def get_book(book_id: int, service: BookService = Depends(get_book_service)):
-    """Fetch a specific book by its unique identifier.
-
-    Retrieves a single book record from the database using the provided book ID.
-    Returns the book details if found, otherwise raises an exception.
-
-    Args:
-        book_id (int): The unique identifier of the book to retrieve. Must be a positive integer.
-        service (BookService): BookService instance injected by FastAPI dependency system.
-
-    Returns:
-        BookResponse: The Book object with the specified ID and all its details.
-
-    Raises:
-        BookNotFoundError: If no book with the given ID exists (handled by exception middleware and returns 404).
-        DatabaseError: If the database query fails (handled by exception middleware and returns 500).
-    """
-    logger.info(f"Retrieving book with id {book_id}")
-    return service.get_book_by_id(book_id)
-
-
 @router.post("", response_model=BookResponse)
 def add_book(book: BookBase, service: BookService = Depends(get_book_service)):
     """Create a new book in the library.

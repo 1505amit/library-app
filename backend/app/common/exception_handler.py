@@ -22,13 +22,17 @@ logger = logging.getLogger(__name__)
 
 async def app_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """
-    Convert domain exceptions to HTTP responses.
+    Convert all exceptions to HTTP responses.
+
+    Handles both domain exceptions (AppException and subclasses) and unexpected
+    built-in exceptions (ValueError, KeyError, TypeError, etc.).
 
     Maps application exceptions to appropriate HTTP status codes:
-    - NotFound errors → 404
-    - Invalid errors → 400
-    - Database errors → 500
-    - Unknown errors → 500
+    - NotFound errors (404) → BookNotFoundError, MemberNotFoundError, BorrowNotFoundError
+    - Invalid errors (400) → InvalidBookError, InvalidMemberError, InvalidBorrowError
+    - Database errors (500) → DatabaseError
+    - Other AppException (500) → Unknown domain errors
+    - Unexpected exceptions (500) → ValueError, KeyError, TypeError, etc.
     """
 
     # 404 Not Found errors
@@ -68,7 +72,7 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
     logger.error(f"Unhandled error: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error"}
+        content={"detail": "An unexpected error occurred. Please try again later."}
     )
 
 
@@ -76,7 +80,15 @@ def add_exception_handlers(app: FastAPI) -> None:
     """
     Register all exception handlers with the FastAPI application.
 
+    Registers handlers in order of specificity:
+    1. AppException and subclasses - domain-specific errors
+    2. Exception (catch-all) - unexpected errors
+
     Args:
         app: The FastAPI application instance
     """
+    # Register for domain exceptions (AppException and all subclasses)
     app.add_exception_handler(AppException, app_exception_handler)
+
+    # Register for any other unexpected exceptions
+    app.add_exception_handler(Exception, app_exception_handler)
