@@ -1,6 +1,14 @@
 from pydantic import BaseModel, Field, field_validator
 
 
+class PaginationMeta(BaseModel):
+    """Metadata for paginated responses."""
+    total: int = Field(..., description="Total number of items")
+    page: int = Field(..., description="Current page number")
+    limit: int = Field(..., description="Number of items per page")
+    pages: int = Field(..., description="Total number of pages")
+
+
 class BookBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255,
                        description="Book title")
@@ -28,3 +36,9 @@ class BookResponse(BookBase):
 
     class Config:
         from_attributes = True
+
+
+class PaginatedBookResponse(BaseModel):
+    """Paginated response containing books and pagination metadata."""
+    data: list[BookResponse] = Field(..., description="List of books")
+    pagination: PaginationMeta = Field(..., description="Pagination metadata")

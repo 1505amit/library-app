@@ -22,20 +22,30 @@ class BookRepository:
             raise ValueError("Database session cannot be None")
         self.db = db
 
-    def get_all_books(self) -> list[Book]:
-        """Retrieve all books from the database.
+    def get_all_books(self, offset: int = 0, limit: int = 10) -> tuple[list[Book], int]:
+        """Retrieve all books from the database with pagination.
+
+        Args:
+            offset (int): Number of records to skip. Defaults to 0.
+            limit (int): Maximum number of records to return. Defaults to 10.
 
         Returns:
-            list[Book]: List of all books (empty list if none exist).
+            tuple[list[Book], int]: A tuple containing:
+                - List of books for the current page
+                - Total count of all books in the database
 
         Raises:
             DatabaseError: If database query fails.
         """
         try:
-            logger.info("Querying all books")
-            books = self.db.query(Book).all()
-            logger.info(f"Retrieved {len(books)} books")
-            return books
+            logger.info(f"Querying books with offset={offset}, limit={limit}")
+            # Get total count
+            total_count = self.db.query(Book).count()
+            # Get paginated results
+            books = self.db.query(Book).offset(offset).limit(limit).all()
+            logger.info(
+                f"Retrieved {len(books)} books out of {total_count} total")
+            return books, total_count
         except SQLAlchemyError as e:
             logger.error(f"Database error in get_all_books: {str(e)}")
             raise DatabaseError(f"Failed to retrieve books: {str(e)}")

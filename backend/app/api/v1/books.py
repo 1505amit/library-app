@@ -1,6 +1,6 @@
 from app.services.book_service import BookService
-from app.schemas.book import BookResponse, BookBase
-from fastapi import APIRouter, Depends
+from app.schemas.book import BookResponse, BookBase, PaginatedBookResponse
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.common.database import get_db
 import logging
@@ -26,21 +26,34 @@ def get_book_service(db: Session = Depends(get_db)) -> BookService:
     return BookService(db)
 
 
-@router.get("", response_model=list[BookResponse])
-def get_books(service: BookService = Depends(get_book_service)):
-    """Fetch all books from the library.
+@router.get("", response_model=PaginatedBookResponse)
+def get_books(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(
+        10, ge=1, le=100, description="Number of items per page"),
+    service: BookService = Depends(get_book_service)
+):
+    """Fetch paginated books from the library.
 
-    Retrieves a complete list of all books available in the library database.
-    No filtering or pagination is applied - all books are returned.
+    Retrieves a paginated list of all books available in the library database.
+    Uses page and limit query parameters to control pagination.
+
+    Args:
+        page (int): Page number starting from 1. Defaults to 1. Must be >= 1.
+        limit (int): Maximum number of books to return per page. Defaults to 10.
+                    Must be between 1 and 100.
+        service (BookService): BookService instance injected by FastAPI dependency system.
 
     Returns:
-        list[BookResponse]: A list of all Book objects with their details.
+        PaginatedBookResponse: An object containing:
+            - data: List of Book objects for the current page
+            - pagination: Metadata including total, page, limit, and total pages
 
     Raises:
         DatabaseError: If the database query fails (handled by exception middleware and returns 500).
     """
-    logger.info("Retrieving all books")
-    return service.get_all_books()
+    logger.info(f"Retrieving books with page={page}, limit={limit}")
+    return service.get_all_books(page=page, limit=limit)
 
 
 @router.post("", response_model=BookResponse)

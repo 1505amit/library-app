@@ -14,19 +14,47 @@ class BookService:
         self.db = db
         self.books_repository = BookRepository(db)
 
-    def get_all_books(self):
-        """Fetch all books from the database.
+    def get_all_books(self, page: int = 1, limit: int = 10) -> dict:
+        """Fetch paginated books from the database.
 
-        Retrieves a list of all book records currently stored in the database.
+        Retrieves a paginated list of book records with pagination metadata.
+
+        Args:
+            page (int): Page number (1-indexed). Defaults to 1.
+            limit (int): Number of books per page. Defaults to 10.
 
         Returns:
-            list[Book]: A list of all Book objects, or an empty list if no books exist.
+            dict: Dictionary containing:
+                - "data": List of Book objects for the current page
+                - "pagination": Dictionary with pagination metadata (total, page, limit, pages)
 
         Raises:
             DatabaseError: If the database query fails due to connection or query issues.
         """
-        logger.info("Retrieving all books")
-        return self.books_repository.get_all_books()
+        logger.info(f"Retrieving books with page={page}, limit={limit}")
+        # Calculate offset from page number
+        offset = (page - 1) * limit
+        # Get paginated books and total count
+        books, total_count = self.books_repository.get_all_books(
+            offset=offset, limit=limit)
+        # Calculate total pages
+        total_pages = (total_count + limit - 1) // limit
+        # Validate page number
+        if total_count > 0 and page > total_pages:
+            logger.error(
+                f"Invalid page number: {page} exceeds total pages: {total_pages}")
+            raise InvalidBookError(
+                f"Page {page} exceeds total pages {total_pages}")
+        # Build response
+        return {
+            "data": books,
+            "pagination": {
+                "total": total_count,
+                "page": page,
+                "limit": limit,
+                "pages": total_pages
+            }
+        }
 
     def get_book_by_id(self, book_id: int):
         """Fetch a single book by its unique identifier.
