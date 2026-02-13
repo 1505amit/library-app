@@ -50,7 +50,7 @@ class MemberService:
         member = self.member_repository.get_member_by_id(member_id)
 
         if not member:
-            logger.warning(f"Member not found: {member_id}")
+            logger.error(f"Member not found: {member_id}")
             raise MemberNotFoundError(
                 f"Member with id {member_id} not found")
 
@@ -104,7 +104,7 @@ class MemberService:
         # Check if member exists
         db_member = self.member_repository.get_member_by_id(member_id)
         if not db_member:
-            logger.warning(f"Member not found for update: {member_id}")
+            logger.error(f"Member not found for update: {member_id}")
             raise MemberNotFoundError(
                 f"Member with id {member_id} not found")
 

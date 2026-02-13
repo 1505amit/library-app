@@ -1,9 +1,10 @@
+"""Borrow data access layer - pure data operations with no business logic."""
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.borrow import BorrowRecord
 from app.models.book import Book
-from app.models.member import Member
 from app.schemas.borrow import BorrowBase
+from app.common.exceptions import DatabaseError
 from datetime import datetime
 import logging
 
@@ -11,56 +12,34 @@ logger = logging.getLogger(__name__)
 
 
 class BorrowRepository:
+    """Repository for borrow data access operations.
+
+    This layer handles all database interactions for borrow records. It returns
+    data as-is or None for missing records. Business logic validation and
+    existence checks are performed in the service layer.
+    """
+
     def __init__(self, db: Session):
         if not db:
             raise ValueError("Database session cannot be None")
         self.db = db
 
-    def create_borrow(self, borrow: BorrowBase):
+    def get_all_borrows(self, returned: bool = True, member_id: int = None, book_id: int = None) -> list[BorrowRecord]:
+        """Retrieve all borrow records with optional filtering.
+
+        Args:
+            returned: Include returned books if True, only active borrows if False.
+            member_id: Filter by member ID if provided.
+            book_id: Filter by book ID if provided.
+
+        Returns:
+            list[BorrowRecord]: List of borrow records matching filters.
+
+        Raises:
+            DatabaseError: If database query fails.
+        """
         try:
-            # Verify book exists and is available
-            book = self.db.query(Book).filter(
-                Book.id == borrow.book_id).first()
-            if not book:
-                raise ValueError(f"Book with id {borrow.book_id} not found")
-            if not book.available:
-                raise ValueError(
-                    f"Book with id {borrow.book_id} is not available")
-
-            # Verify member exists
-            member = self.db.query(Member).filter(
-                Member.id == borrow.member_id).first()
-            if not member:
-                raise ValueError(
-                    f"Member with id {borrow.member_id} not found")
-            if not member.active:
-                raise ValueError(
-                    f"Member with id {borrow.member_id} is not active")
-
-            # Create borrow record
-            db_borrow = BorrowRecord(**borrow.dict())
-            self.db.add(db_borrow)
-
-            # Mark book as unavailable
-            book.available = False
-
-            self.db.commit()
-            self.db.refresh(db_borrow)
-            return db_borrow
-        except ValueError:
-            self.db.rollback()
-            raise
-        except SQLAlchemyError as e:
-            self.db.rollback()
-            logger.error(f"Database error in create_borrow: {str(e)}")
-            raise
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Unexpected error in create_borrow: {str(e)}")
-            raise
-
-    def get_all_borrows(self, returned: bool = True, member_id: int = None, book_id: int = None):
-        try:
+            logger.info("Querying all borrow records")
             query = self.db.query(BorrowRecord)
 
             # Filter out returned books if returned is False
@@ -76,51 +55,107 @@ class BorrowRepository:
                 query = query.filter(BorrowRecord.book_id == book_id)
 
             borrow_records = query.all()
+            logger.info(f"Retrieved {len(borrow_records)} borrow records")
             return borrow_records
         except SQLAlchemyError as e:
             logger.error(f"Database error in get_all_borrows: {str(e)}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error in get_all_borrows: {str(e)}")
-            raise
+            raise DatabaseError(f"Failed to retrieve borrow records: {str(e)}")
 
-    def return_borrow(self, borrow_id: int):
+    def get_borrow_by_id(self, borrow_id: int) -> BorrowRecord | None:
+        """Retrieve a single borrow record by ID.
+
+        Args:
+            borrow_id: The ID of the borrow record to retrieve.
+
+        Returns:
+            BorrowRecord: The borrow record if found, None otherwise.
+
+        Raises:
+            DatabaseError: If database query fails.
+        """
         try:
-            # Fetch the borrow record
-            borrow_record = self.db.query(BorrowRecord).filter(
+            logger.info(f"Querying borrow with id={borrow_id}")
+            borrow = self.db.query(BorrowRecord).filter(
                 BorrowRecord.id == borrow_id).first()
-            if not borrow_record:
-                raise ValueError(
-                    f"Borrow record with id {borrow_id} not found")
+            if borrow:
+                logger.info(f"Found borrow: {borrow.id}")
+            else:
+                logger.error(f"Borrow not found: {borrow_id}")
+            return borrow
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in get_borrow_by_id: {str(e)}")
+            raise DatabaseError(f"Failed to retrieve borrow record: {str(e)}")
 
-            # Check if already returned
-            if borrow_record.returned_at is not None:
-                raise ValueError(
-                    f"Borrow record with id {borrow_id} has already been returned")
+    def create_borrow(self, borrow_data: BorrowBase, book: Book) -> BorrowRecord:
+        """Create a new borrow record in the database.
 
-            # Fetch the book and mark it as available
-            book = self.db.query(Book).filter(
-                Book.id == borrow_record.book_id).first()
-            if not book:
-                raise ValueError(
-                    f"Book with id {borrow_record.book_id} not found")
+        Args:
+            borrow_data: The borrow data to create.
+            book: The book object being borrowed (for updating availability).
+
+        Returns:
+            BorrowRecord: The newly created borrow record.
+
+        Raises:
+            DatabaseError: If database operation fails.
+
+        Note:
+            The service layer is responsible for verifying book exists, is available,
+            member exists, and member is active before calling this method.
+            This method assumes all entities are valid.
+        """
+        try:
+            logger.info(
+                f"Creating borrow for book={borrow_data.book_id}, member={borrow_data.member_id}")
+
+            # Create borrow record
+            db_borrow = BorrowRecord(**borrow_data.model_dump())
+            self.db.add(db_borrow)
+
+            # Mark book as unavailable
+            book.available = False
+
+            self.db.commit()
+            self.db.refresh(db_borrow)
+            logger.info(f"Successfully created borrow record: {db_borrow.id}")
+            return db_borrow
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Database error in create_borrow: {str(e)}")
+            raise DatabaseError(f"Failed to create borrow record: {str(e)}")
+
+    def return_borrow(self, borrow_record: BorrowRecord, book: Book) -> BorrowRecord:
+        """Mark a borrow record as returned and restore book availability.
+
+        Args:
+            borrow_record: The borrow record to update.
+            book: The book object being returned.
+
+        Returns:
+            BorrowRecord: The updated borrow record.
+
+        Raises:
+            DatabaseError: If database operation fails.
+
+        Note:
+            The service layer is responsible for verifying the borrow record exists
+            and has not already been returned before calling this method.
+        """
+        try:
+            logger.info(f"Returning borrow: {borrow_record.id}")
 
             # Update borrow record with return date
-            borrow_record.returned_at = datetime.utcnow()
+            borrow_record.returned_at = datetime.now(datetime.timezone.utc)
+
             # Mark book as available
             book.available = True
 
             self.db.commit()
             self.db.refresh(borrow_record)
+            logger.info(
+                f"Successfully returned borrow record: {borrow_record.id}")
             return borrow_record
-        except ValueError:
-            self.db.rollback()
-            raise
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Database error in return_borrow: {str(e)}")
-            raise
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Unexpected error in return_borrow: {str(e)}")
-            raise
+            raise DatabaseError(f"Failed to return borrow record: {str(e)}")

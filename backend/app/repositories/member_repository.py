@@ -59,7 +59,7 @@ class MemberRepository:
             if member:
                 logger.info(f"Found member: {member.id}")
             else:
-                logger.info(f"Member not found: {member_id}")
+                logger.error(f"Member not found: {member_id}")
             return member
         except SQLAlchemyError as e:
             logger.error(f"Database error in get_member_by_id: {str(e)}")
@@ -79,7 +79,7 @@ class MemberRepository:
         """
         try:
             logger.info(f"Creating member with email={member_data.email}")
-            db_member = Member(**member_data.dict())
+            db_member = Member(**member_data.model_dump())
             self.db.add(db_member)
             self.db.commit()
             self.db.refresh(db_member)
@@ -118,7 +118,7 @@ class MemberRepository:
         """
         try:
             logger.info(f"Updating member: {member_id}")
-            for key, value in member_data.dict(exclude_unset=True).items():
+            for key, value in member_data.model_dump(exclude_unset=True).items():
                 setattr(db_member, key, value)
 
             self.db.commit()

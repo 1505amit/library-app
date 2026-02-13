@@ -1,4 +1,4 @@
-# repositories/book_repository.py
+"""Book data access layer - pure data operations with no business logic."""
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.book import Book
@@ -10,53 +10,47 @@ logger = logging.getLogger(__name__)
 
 
 class BookRepository:
+    """Repository for book data access operations.
+
+    This layer handles all database interactions for books. It returns data
+    as-is or None for missing records. Business logic validation and existence
+    checks are performed in the service layer.
+    """
+
     def __init__(self, db: Session):
         if not db:
             raise ValueError("Database session cannot be None")
         self.db = db
 
-    def get_all_books(self):
-        """Fetch all books from the database.
-
-        Executes a database query to retrieve all Book records currently stored.
-        This is a pure data access operation with no business logic filtering.
+    def get_all_books(self) -> list[Book]:
+        """Retrieve all books from the database.
 
         Returns:
-            list[Book]: A list of all Book objects from the database, or an empty list if no books exist.
+            list[Book]: List of all books (empty list if none exist).
 
         Raises:
-            DatabaseError: If the SQL query fails, database connection is lost, or any
-                database-level exception occurs during the fetch operation.
+            DatabaseError: If database query fails.
         """
         try:
-            logger.info("Fetching all books from database")
+            logger.info("Querying all books")
             books = self.db.query(Book).all()
+            logger.info(f"Retrieved {len(books)} books")
             return books
         except SQLAlchemyError as e:
-            logger.error(f"Database query failed in get_all_books: {str(e)}")
-            raise DatabaseError("Failed to retrieve books from database")
-        except Exception as e:
-            logger.error(f"Unexpected error in get_all_books: {str(e)}")
-            raise DatabaseError(
-                "An unexpected error occurred while retrieving books")
+            logger.error(f"Database error in get_all_books: {str(e)}")
+            raise DatabaseError(f"Failed to retrieve books: {str(e)}")
 
-    def create_book(self, book: BookBase):
-        """Persist a new book record to the database.
-
-        Creates a new Book object from the provided schema, adds it to the database session,
-        commits the transaction, and returns the newly created book with its generated ID.
-        All input validation should be completed before calling this method.
+    def create_book(self, book: BookBase) -> Book:
+        """Create a new book in the database.
 
         Args:
-            book (BookBase): A validated BookBase schema containing the book's details.
-                Expected to be pre-validated by the service layer.
+            book: The book data to create.
 
         Returns:
-            Book: The newly persisted Book object with an auto-generated ID from the database.
+            Book: The newly created book with auto-generated ID.
 
         Raises:
-            DatabaseError: If the insert operation fails, database constraints are violated,
-                commit fails, or any other database-level exception occurs.
+            DatabaseError: If database operation fails.
         """
         try:
             logger.info(f"Creating book: {book.title}")
@@ -64,89 +58,64 @@ class BookRepository:
             self.db.add(db_book)
             self.db.commit()
             self.db.refresh(db_book)
-            logger.info(f"Book created with id {db_book.id}")
+            logger.info(f"Successfully created book: {db_book.id}")
             return db_book
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Database error in create_book: {str(e)}")
-            raise DatabaseError("Failed to create book in database")
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Unexpected error in create_book: {str(e)}")
-            raise DatabaseError(
-                "An unexpected error occurred while creating book")
+            raise DatabaseError(f"Failed to create book: {str(e)}")
 
-    def get_book_by_id(self, book_id: int):
-        """Retrieve a single book from the database by its ID.
-
-        Executes a database query to fetch a specific Book record using its unique identifier.
-        This is a pure data access operation that returns the record if it exists, or None otherwise.
-        No exception is raised for missing records - the caller is responsible for handling None.
+    def get_book_by_id(self, book_id: int) -> Book | None:
+        """Retrieve a single book by ID.
 
         Args:
-            book_id (int): The unique database identifier of the book to retrieve.
-                Must be a positive integer.
+            book_id: The ID of the book to retrieve.
 
         Returns:
-            Book | None: The Book object if found, or None if no book with the given ID exists.
+            Book: The book if found, None otherwise.
 
         Raises:
-            DatabaseError: If the SQL query fails, database connection is lost, or any
-                database-level exception occurs during the fetch operation.
+            DatabaseError: If database query fails.
         """
         try:
-            logger.info(f"Fetching book with id {book_id}")
-            return self.db.query(Book).filter(Book.id == book_id).first()
+            logger.info(f"Querying book with id={book_id}")
+            book = self.db.query(Book).filter(Book.id == book_id).first()
+            if book:
+                logger.info(f"Found book: {book.id}")
+            else:
+                logger.error(f"Book not found: {book_id}")
+            return book
         except SQLAlchemyError as e:
-            logger.error(f"Database query failed in get_book_by_id: {str(e)}")
-            raise DatabaseError("Failed to retrieve book from database")
-        except Exception as e:
-            logger.error(f"Unexpected error in get_book_by_id: {str(e)}")
-            raise DatabaseError(
-                "An unexpected error occurred while retrieving book")
+            logger.error(f"Database error in get_book_by_id: {str(e)}")
+            raise DatabaseError(f"Failed to retrieve book: {str(e)}")
 
-    def update_book(self, book_id: int, book_data: BookBase, db_book: Book):
-        """Update an existing book record in the database.
-
-        Applies changes from the provided BookBase schema to the given Book object,
-        including support for partial updates (only provided fields are modified).
-        The transaction is committed and the updated object is refreshed from the database.
-
-        Important: This method assumes the book already exists (verified by the caller).
-        The caller (service layer) must verify the book exists before calling this method.
+    def update_book(self, book_id: int, book_data: BookBase, db_book: Book) -> Book:
+        """Update an existing book in the database.
 
         Args:
-            book_id (int): The unique database identifier of the book being updated.
-                Used only for logging purposes.
-            book_data (BookBase): A validated BookBase schema containing the new book details.
-                Only fields explicitly set in the request will be updated (partial updates).
-            db_book (Book): The existing Book object from the database that should be modified.
-                Must be attached to the current session.
+            book_id: The ID of the book to update (for logging).
+            book_data: The new book data.
+            db_book: The existing book object from the database.
 
         Returns:
-            Book: The updated Book object with all current values refreshed from the database.
+            Book: The updated book.
 
         Raises:
-            DatabaseError: If the update operation fails, database constraints are violated,
-                commit fails, or any other database-level exception occurs. Automatically
-                rolls back the transaction on failure.
+            DatabaseError: If database operation fails.
+
+        Note:
+            The service layer is responsible for verifying the book exists before
+            calling this method. This method assumes db_book is a valid object.
         """
         try:
-            logger.info(f"Updating book with id {book_id}")
-            # Only update fields that were explicitly set in the request
-            update_data = book_data.model_dump(exclude_unset=True)
-            for key, value in update_data.items():
+            logger.info(f"Updating book: {book_id}")
+            for key, value in book_data.model_dump(exclude_unset=True).items():
                 setattr(db_book, key, value)
             self.db.commit()
             self.db.refresh(db_book)
-            logger.info(f"Book updated with id {book_id}")
+            logger.info(f"Successfully updated book: {book_id}")
             return db_book
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Database error in update_book: {str(e)}")
-            raise DatabaseError("Failed to update book in database")
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Unexpected error in update_book: {str(e)}")
-            raise DatabaseError(
-                "An unexpected error occurred while updating book")
+            raise DatabaseError(f"Failed to update book: {str(e)}")
