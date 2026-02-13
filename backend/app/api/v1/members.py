@@ -37,7 +37,7 @@ def list_members(service: MemberService = Depends(get_member_service)):
     Raises:
         HTTP 500: If database operation fails (handled by exception middleware).
     """
-    logger.info("API: listing all members")
+    logger.info("listing all members")
     return service.get_all_members()
 
 
@@ -59,7 +59,7 @@ def add_member(member: MemberBase, service: MemberService = Depends(get_member_s
         HTTP 409: If email already exists (handled by exception middleware).
         HTTP 500: If database operation fails (handled by exception middleware).
     """
-    logger.info(f"API: creating member with email={member.email}")
+    logger.info(f"creating member with email={member.email}")
     return service.create_member(member)
 
 
@@ -83,5 +83,5 @@ def update_member(member_id: int, member: MemberBase, service: MemberService = D
         HTTP 409: If email already exists (handled by exception middleware).
         HTTP 500: If database operation fails (handled by exception middleware).
     """
-    logger.info(f"API: updating member {member_id}")
+    logger.info(f"updating member {member_id}")
     return service.update_member(member_id, member)
