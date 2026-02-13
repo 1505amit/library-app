@@ -2,6 +2,14 @@ from pydantic import BaseModel, Field, field_validator
 import re
 
 
+class PaginationMeta(BaseModel):
+    """Metadata for paginated responses."""
+    total: int = Field(..., description="Total number of items")
+    page: int = Field(..., description="Current page number")
+    limit: int = Field(..., description="Number of items per page")
+    pages: int = Field(..., description="Total number of pages")
+
+
 class MemberBase(BaseModel):
     """Base schema for member data with validation and normalization."""
     name: str = Field(..., min_length=1, max_length=255,
@@ -71,3 +79,9 @@ class MemberResponse(MemberBase):
 
     class Config:
         from_attributes = True
+
+
+class PaginatedMemberResponse(BaseModel):
+    """Paginated response containing members and pagination metadata."""
+    data: list[MemberResponse] = Field(..., description="List of members")
+    pagination: PaginationMeta = Field(..., description="Pagination metadata")

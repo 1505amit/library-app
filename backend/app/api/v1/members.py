@@ -1,9 +1,9 @@
 """Member API endpoints - HTTP routing layer."""
 from app.services.member_service import MemberService
 from app.common.database import get_db
-from app.schemas.member import MemberBase, MemberResponse
+from app.schemas.member import MemberBase, MemberResponse, PaginatedMemberResponse
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 import logging
 
 router = APIRouter()
@@ -22,23 +22,35 @@ def get_member_service(db: Session = Depends(get_db)) -> MemberService:
     return MemberService(db)
 
 
-@router.get("", response_model=list[MemberResponse])
-def list_members(service: MemberService = Depends(get_member_service)):
-    """Get all members.
+@router.get("", response_model=PaginatedMemberResponse)
+def list_members(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(
+        10, ge=1, le=100, description="Number of items per page"),
+    service: MemberService = Depends(get_member_service)
+):
+    """Get paginated members.
 
-    Retrieves a list of all members in the system.
+    Retrieves a paginated list of all members in the system.
+    Uses page and limit query parameters to control pagination.
 
     Args:
+        page (int): Page number starting from 1. Defaults to 1. Must be >= 1.
+        limit (int): Maximum number of members to return per page. Defaults to 10.
+                    Must be between 1 and 100.
         service: Member service injected from get_member_service().
 
     Returns:
-        list[MemberResponse]: List of all members (empty if none exist).
+        PaginatedMemberResponse: An object containing:
+            - data: List of Member objects for the current page
+            - pagination: Metadata including total, page, limit, and total pages
 
     Raises:
+        HTTP 400: If page number is invalid (handled by exception middleware).
         HTTP 500: If database operation fails (handled by exception middleware).
     """
-    logger.info("listing all members")
-    return service.get_all_members()
+    logger.info(f"listing members with page={page}, limit={limit}")
+    return service.get_all_members(page=page, limit=limit)
 
 
 @router.post("", response_model=MemberResponse)

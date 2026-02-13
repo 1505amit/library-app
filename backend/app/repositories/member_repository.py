@@ -1,7 +1,7 @@
 """Member data access layer - pure data operations with no business logic."""
 from app.models import Member
 from app.schemas.member import MemberBase
-from app.common.exceptions import DatabaseError
+from app.common.exceptions import DatabaseError, InvalidMemberError
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import logging
@@ -22,20 +22,31 @@ class MemberRepository:
             raise ValueError("Database session cannot be None")
         self.db = db
 
-    def get_all_members(self) -> list[Member]:
-        """Retrieve all members from the database.
+    def get_all_members(self, offset: int = 0, limit: int = 10) -> tuple[list[Member], int]:
+        """Retrieve all members from the database with pagination.
+
+        Args:
+            offset (int): Number of records to skip. Defaults to 0.
+            limit (int): Maximum number of records to return. Defaults to 10.
 
         Returns:
-            list[Member]: List of all members (empty list if none exist).
+            tuple[list[Member], int]: A tuple containing:
+                - List of members for the current page
+                - Total count of all members in the database
 
         Raises:
             DatabaseError: If database query fails.
         """
         try:
-            logger.info("Querying all members")
-            members = self.db.query(Member).all()
-            logger.info(f"Retrieved {len(members)} members")
-            return members
+            logger.info(
+                f"Querying members with offset={offset}, limit={limit}")
+            # Get total count
+            total_count = self.db.query(Member).count()
+            # Get paginated results
+            members = self.db.query(Member).offset(offset).limit(limit).all()
+            logger.info(
+                f"Retrieved {len(members)} members out of {total_count} total")
+            return members, total_count
         except SQLAlchemyError as e:
             logger.error(f"Database error in get_all_members: {str(e)}")
             raise DatabaseError(f"Failed to retrieve members: {str(e)}")
@@ -75,7 +86,8 @@ class MemberRepository:
             Member: The newly created member with auto-generated ID.
 
         Raises:
-            DatabaseError: If database operation fails (including constraint violations).
+            InvalidMemberError: If email already exists (business rule violation).
+            DatabaseError: If database operation fails for other reasons.
         """
         try:
             logger.info(f"Creating member with email={member_data.email}")
@@ -89,7 +101,7 @@ class MemberRepository:
             self.db.rollback()
             logger.error(f"Integrity error in create_member: {str(e)}")
             if "email" in str(e).lower():
-                raise DatabaseError(
+                raise InvalidMemberError(
                     f"Email already exists: {member_data.email}")
             raise DatabaseError(
                 f"Member creation failed due to constraint violation: {str(e)}")
@@ -129,7 +141,7 @@ class MemberRepository:
             self.db.rollback()
             logger.error(f"Integrity error in update_member: {str(e)}")
             if "email" in str(e).lower():
-                raise DatabaseError(
+                raise InvalidMemberError(
                     f"Email already exists: {member_data.email}")
             raise DatabaseError(
                 f"Member update failed due to constraint violation: {str(e)}")

@@ -21,17 +21,49 @@ class MemberService:
         self.db = db
         self.member_repository = MemberRepository(db)
 
-    def get_all_members(self) -> list:
-        """Retrieve all members.
+    def get_all_members(self, page: int = 1, limit: int = 10) -> dict:
+        """Retrieve paginated members.
+
+        Retrieves a paginated list of member records with pagination metadata.
+
+        Args:
+            page (int): Page number (1-indexed). Defaults to 1.
+            limit (int): Number of members per page. Defaults to 10.
 
         Returns:
-            list: List of all members (empty if none exist).
+            dict: Dictionary containing:
+                - "data": List of Member objects for the current page
+                - "pagination": Dictionary with pagination metadata (total, page, limit, pages)
 
         Raises:
-            DatabaseError: If database operation fails.
+            DatabaseError: If the database query fails due to connection or query issues.
+            InvalidMemberError: If page number exceeds total pages.
         """
-        logger.info("Service: retrieving all members")
-        return self.member_repository.get_all_members()
+        logger.info(
+            f"Service: retrieving members with page={page}, limit={limit}")
+        # Calculate offset from page number
+        offset = (page - 1) * limit
+        # Get paginated members and total count
+        members, total_count = self.member_repository.get_all_members(
+            offset=offset, limit=limit)
+        # Calculate total pages
+        total_pages = (total_count + limit - 1) // limit
+        # Validate page number
+        if total_count > 0 and page > total_pages:
+            logger.error(
+                f"Invalid page number: {page} exceeds total pages: {total_pages}")
+            raise InvalidMemberError(
+                f"Page {page} exceeds total pages {total_pages}")
+        # Build response
+        return {
+            "data": members,
+            "pagination": {
+                "total": total_count,
+                "page": page,
+                "limit": limit,
+                "pages": total_pages
+            }
+        }
 
     def get_member_by_id(self, member_id: int):
         """Retrieve a single member by ID.
