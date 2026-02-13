@@ -2,6 +2,14 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 
+class PaginationMeta(BaseModel):
+    """Metadata for paginated responses."""
+    total: int = Field(..., description="Total number of items")
+    page: int = Field(..., description="Current page number")
+    limit: int = Field(..., description="Number of items per page")
+    pages: int = Field(..., description="Total number of pages")
+
+
 class BorrowBase(BaseModel):
     """Base schema for borrow operations with validation."""
     book_id: int = Field(..., gt=0, description="ID of the book to borrow")
@@ -55,6 +63,13 @@ class BorrowDetailedResponse(BorrowBase):
 
     class Config:
         from_attributes = True
+
+
+class PaginatedBorrowDetailedResponse(BaseModel):
+    """Paginated response containing borrow records and pagination metadata."""
+    data: list[BorrowDetailedResponse] = Field(
+        ..., description="List of borrow records")
+    pagination: PaginationMeta = Field(..., description="Pagination metadata")
 
 
 class BorrowReturnRequest(BaseModel):

@@ -31,27 +31,55 @@ class BorrowService:
         self.book_repository = BookRepository(db)
         self.member_repository = MemberRepository(db)
 
-    def get_all_borrows(self, returned: bool = True, member_id: int = None, book_id: int = None) -> list:
-        """Retrieve all borrow records with optional filtering.
+    def get_all_borrows(self, returned: bool = True, member_id: int = None, book_id: int = None, page: int = 1, limit: int = 10) -> dict:
+        """Retrieve paginated borrow records with optional filtering.
 
         Args:
             returned: Include returned books if True, only active borrows if False.
             member_id: Filter by member ID if provided.
             book_id: Filter by book ID if provided.
+            page (int): Page number (1-indexed). Defaults to 1.
+            limit (int): Number of borrow records per page. Defaults to 10.
 
         Returns:
-            list: List of borrow records matching filters.
+            dict: Dictionary containing:
+                - "data": List of BorrowDetailedResponse objects for the current page
+                - "pagination": Dictionary with pagination metadata (total, page, limit, pages)
 
         Raises:
+            InvalidBorrowError: If page number exceeds total pages.
             DatabaseError: If database operation fails.
         """
         logger.info(
-            f"Service: retrieving borrow records (returned={returned}, member={member_id}, book={book_id})")
-        return self.borrow_repository.get_all_borrows(
+            f"Service: retrieving borrow records (returned={returned}, member={member_id}, book={book_id}, page={page}, limit={limit})")
+        # Calculate offset from page number
+        offset = (page - 1) * limit
+        # Get paginated borrow records and total count
+        borrow_records, total_count = self.borrow_repository.get_all_borrows(
             returned=returned,
             member_id=member_id,
-            book_id=book_id
+            book_id=book_id,
+            offset=offset,
+            limit=limit
         )
+        # Calculate total pages
+        total_pages = (total_count + limit - 1) // limit
+        # Validate page number
+        if total_count > 0 and page > total_pages:
+            logger.warning(
+                f"Invalid page number: {page} exceeds total pages: {total_pages}")
+            raise InvalidBorrowError(
+                f"Page {page} exceeds total pages {total_pages}")
+        # Build response
+        return {
+            "data": borrow_records,
+            "pagination": {
+                "total": total_count,
+                "page": page,
+                "limit": limit,
+                "pages": total_pages
+            }
+        }
 
     def borrow_book(self, borrow_data: BorrowBase):
         """Borrow a book for a member.

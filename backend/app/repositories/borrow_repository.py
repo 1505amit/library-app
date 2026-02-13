@@ -24,22 +24,27 @@ class BorrowRepository:
             raise ValueError("Database session cannot be None")
         self.db = db
 
-    def get_all_borrows(self, returned: bool = True, member_id: int = None, book_id: int = None) -> list[BorrowRecord]:
-        """Retrieve all borrow records with optional filtering.
+    def get_all_borrows(self, returned: bool = True, member_id: int = None, book_id: int = None, offset: int = 0, limit: int = 10) -> tuple[list[BorrowRecord], int]:
+        """Retrieve paginated borrow records with optional filtering.
 
         Args:
             returned: Include returned books if True, only active borrows if False.
             member_id: Filter by member ID if provided.
             book_id: Filter by book ID if provided.
+            offset (int): Number of records to skip. Defaults to 0.
+            limit (int): Maximum number of records to return. Defaults to 10.
 
         Returns:
-            list[BorrowRecord]: List of borrow records matching filters.
+            tuple[list[BorrowRecord], int]: A tuple containing:
+                - List of borrow records for the current page
+                - Total count of borrow records matching the filters
 
         Raises:
             DatabaseError: If database query fails.
         """
         try:
-            logger.info("Querying all borrow records")
+            logger.info(
+                f"Querying borrow records with offset={offset}, limit={limit}")
             query = self.db.query(BorrowRecord)
 
             # Filter out returned books if returned is False
@@ -54,9 +59,13 @@ class BorrowRepository:
             if book_id is not None:
                 query = query.filter(BorrowRecord.book_id == book_id)
 
-            borrow_records = query.all()
-            logger.info(f"Retrieved {len(borrow_records)} borrow records")
-            return borrow_records
+            # Get total count of filtered results
+            total_count = query.count()
+            # Get paginated results
+            borrow_records = query.offset(offset).limit(limit).all()
+            logger.info(
+                f"Retrieved {len(borrow_records)} borrow records out of {total_count} total")
+            return borrow_records, total_count
         except SQLAlchemyError as e:
             logger.error(f"Database error in get_all_borrows: {str(e)}")
             raise DatabaseError(f"Failed to retrieve borrow records: {str(e)}")

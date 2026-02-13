@@ -1,11 +1,11 @@
 """Borrow API endpoints - HTTP routing layer."""
 from app.services.borrow_service import BorrowService
-from app.schemas.borrow import BorrowResponse, BorrowRequest, BorrowReturnRequest, BorrowDetailedResponse
-from fastapi import APIRouter, Depends
+from app.schemas.borrow import BorrowResponse, BorrowRequest, BorrowReturnRequest, BorrowDetailedResponse, PaginatedBorrowDetailedResponse
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.common.database import get_db
 import logging
-from typing import List, Optional
+from typing import Optional
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,16 +23,19 @@ def get_borrow_service(db: Session = Depends(get_db)) -> BorrowService:
     return BorrowService(db)
 
 
-@router.get("", response_model=List[BorrowDetailedResponse])
+@router.get("", response_model=PaginatedBorrowDetailedResponse)
 def get_all_borrows(
     returned: bool = True,
     member_id: Optional[int] = None,
     book_id: Optional[int] = None,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(
+        10, ge=1, le=100, description="Number of items per page"),
     service: BorrowService = Depends(get_borrow_service)
 ):
-    """Get borrowed books with optional filtering.
+    """Get paginated borrowed books with optional filtering.
 
-    Retrieves borrow records with optional filtering by status, member, or book.
+    Retrieves paginated borrow records with optional filtering by status, member, or book.
 
     Query Parameters:
     - **returned** (bool, default: True): Include returned books in the response.
@@ -40,19 +43,27 @@ def get_all_borrows(
       - If False: Returns only active borrow records (not yet returned)
     - **member_id** (int, optional): Filter borrow records by member ID
     - **book_id** (int, optional): Filter borrow records by book ID
+    - **page** (int, default: 1): Page number starting from 1. Must be >= 1.
+    - **limit** (int, default: 10): Maximum number of records to return per page.
+                                     Must be between 1 and 100.
 
     Returns:
-        List[BorrowDetailedResponse]: List of borrow records with book and member details.
+        PaginatedBorrowDetailedResponse: An object containing:
+            - data: List of borrow records with book and member details
+            - pagination: Metadata including total, page, limit, and total pages
 
     Raises:
+        HTTP 400: If page number is invalid (handled by exception middleware).
         HTTP 500: If database operation fails (handled by exception middleware).
     """
     logger.info(
-        f"listing borrows (returned={returned}, member={member_id}, book={book_id})")
+        f"listing borrows (returned={returned}, member={member_id}, book={book_id}, page={page}, limit={limit})")
     return service.get_all_borrows(
         returned=returned,
         member_id=member_id,
-        book_id=book_id
+        book_id=book_id,
+        page=page,
+        limit=limit
     )
 
 
