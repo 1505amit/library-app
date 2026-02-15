@@ -91,8 +91,6 @@ class MemberService:
     def create_member(self, member_data: MemberBase):
         """Create a new member.
 
-        Validates that the member data meets business requirements before creation.
-
         Args:
             member_data: The member data to create.
 
@@ -106,9 +104,6 @@ class MemberService:
         logger.info(
             f"Service: creating member with email={member_data.email}")
 
-        # Validate member data
-        self._validate_member_data(member_data)
-
         # Create in repository
         member = self.member_repository.create_member(member_data)
         logger.info(f"Member created successfully: {member.id}")
@@ -116,8 +111,6 @@ class MemberService:
 
     def update_member(self, member_id: int, member_data: MemberBase):
         """Update an existing member.
-
-        Validates that member exists and data meets business requirements before update.
 
         Args:
             member_id: The ID of the member to update.
@@ -140,28 +133,8 @@ class MemberService:
             raise MemberNotFoundError(
                 f"Member with id {member_id} not found")
 
-        # Validate member data
-        self._validate_member_data(member_data)
-
         # Update in repository
         member = self.member_repository.update_member(
             member_id, member_data, db_member)
         logger.info(f"Member updated successfully: {member_id}")
         return member
-
-    def _validate_member_data(self, member_data: MemberBase) -> None:
-        """Validate member data against business rules.
-
-        Args:
-            member_data: The member data to validate.
-
-        Raises:
-            InvalidMemberError: If member data violates business rules.
-        """
-        # Email format validation (already done by Pydantic in schema)
-        # Additional business rules can be added here as needed
-        if not member_data.name or not member_data.name.strip():
-            raise InvalidMemberError("Member name cannot be empty")
-
-        if not member_data.email or not member_data.email.strip():
-            raise InvalidMemberError("Member email cannot be empty")

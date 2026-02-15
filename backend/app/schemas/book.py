@@ -21,11 +21,9 @@ class BookBase(BaseModel):
 
     @field_validator('title', 'author', mode='after')
     @classmethod
-    def normalize_text(cls, v):
+    def normalize_text(cls, v: str) -> str:
         """Normalize: trim whitespace"""
-        if isinstance(v, str):
-            return v.strip()
-        return v
+        return v.strip()
 
     class Config:
         str_strip_whitespace = True

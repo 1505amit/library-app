@@ -66,7 +66,7 @@ class BorrowService:
         total_pages = (total_count + limit - 1) // limit
         # Validate page number
         if total_count > 0 and page > total_pages:
-            logger.warning(
+            logger.error(
                 f"Invalid page number: {page} exceeds total pages: {total_pages}")
             raise InvalidBorrowError(
                 f"Page {page} exceeds total pages {total_pages}")

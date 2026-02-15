@@ -5,7 +5,7 @@ from app.models.borrow import BorrowRecord
 from app.models.book import Book
 from app.schemas.borrow import BorrowBase
 from app.common.exceptions import DatabaseError
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -154,7 +154,7 @@ class BorrowRepository:
             logger.info(f"Returning borrow: {borrow_record.id}")
 
             # Update borrow record with return date
-            borrow_record.returned_at = datetime.now(datetime.timezone.utc)
+            borrow_record.returned_at = datetime.now(timezone.utc)
 
             # Mark book as available
             book.available = True
