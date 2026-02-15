@@ -49,16 +49,21 @@ const BorrowFormModal = ({
         setLoadingOptions(true);
         try {
           const [membersData, booksData] = await Promise.all([
-            getMembers(),
-            book ? Promise.resolve(null) : getBooks(),
+            getMembers(1, 100), // Fetch with high limit to get all members
+            book ? Promise.resolve(null) : getBooks(1, 100), // Fetch with high limit to get all books
           ]);
+          
+          // Extract data arrays from paginated responses
+          const membersList = membersData.data || membersData || [];
+          const booksList = booksData?.data || booksData || [];
+          
           // Filter active members and available books
-          const activeMembers = membersData.filter((m) => m.active);
+          const activeMembers = membersList.filter((m) => m.active);
           setMembers(activeMembers);
 
           // Only set available books if not in single-book mode
-          if (!book && booksData) {
-            const availableBooks = booksData.filter((b) => b.available);
+          if (!book && booksList.length > 0) {
+            const availableBooks = booksList.filter((b) => b.available);
             setBooks(availableBooks);
           }
 

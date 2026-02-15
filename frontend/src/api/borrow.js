@@ -1,21 +1,16 @@
 import api from "./index";
+import { API_ENDPOINTS } from "../config/constants.js";
 
-// Fetch all borrow records with optional filters
-export const getBorrows = async (includeReturned = true, memberId = null, bookId = null) => {
+// Fetch all borrow records with pagination and optional filters
+export const getBorrows = async (page = 1, limit = 10, filters = {}) => {
   try {
     const params = {
-      returned: includeReturned,
+      page,
+      limit,
+      ...filters,
     };
-    
-    if (memberId) {
-      params.member_id = memberId;
-    }
-    
-    if (bookId) {
-      params.book_id = bookId;
-    }
-    
-    const response = await api.get("/borrow", {
+
+    const response = await api.get(API_ENDPOINTS.BORROW.LIST, {
       params,
     });
     return response.data;
@@ -28,7 +23,7 @@ export const getBorrows = async (includeReturned = true, memberId = null, bookId
 // Create a borrow record
 export const borrowBook = async (borrowData) => {
   try {
-    const response = await api.post("/borrow", borrowData);
+    const response = await api.post(API_ENDPOINTS.BORROW.CREATE, borrowData);
     return response.data;
   } catch (error) {
     console.error("Error creating borrow record:", error);
@@ -39,7 +34,9 @@ export const borrowBook = async (borrowData) => {
 // Return a borrowed book
 export const returnBook = async (borrowId) => {
   try {
-    const response = await api.patch(`/borrow/${borrowId}/return`);
+    const response = await api.patch(
+      API_ENDPOINTS.BORROW.RETURN(borrowId)
+    );
     return response.data;
   } catch (error) {
     console.error("Error returning book:", error);

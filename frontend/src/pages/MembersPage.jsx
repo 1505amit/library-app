@@ -4,13 +4,22 @@ import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import MemberFormModal from "../components/MemberFormModal";
-import { useDataFetch } from "../hooks/useDataFetch";
+import { usePaginatedDataFetch } from "../hooks/usePaginatedDataFetch";
 import { getMembers, createMember, updateMember } from "../api/members";
 
 const MembersPage = () => {
-  const { data: members, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
-    useDataFetch(getMembers);
-  
+  const {
+    data: members,
+    totalRecords,
+    page,
+    pageSize,
+    loading,
+    error: fetchError,
+    onPaginationChange,
+    refetch,
+  } = usePaginatedDataFetch(getMembers);
+
+  const [openFetchNotification, setOpenFetchNotification] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -20,7 +29,7 @@ const MembersPage = () => {
   const [notificationType, setNotificationType] = useState("info");
 
   const columns = [
-    { field: "id", headerName: "ID" },
+    { field: "id", headerName: "Sr. No." },
     { field: "name", headerName: "Name" },
     { field: "email", headerName: "Email" },
     { field: "phone", headerName: "Phone" },
@@ -160,6 +169,11 @@ const MembersPage = () => {
             columns={columns}
             rows={members}
             actions={actions}
+            totalRecords={totalRecords}
+            onPaginationChange={onPaginationChange}
+            pageSize={pageSize}
+            isServerPagination={true}
+            currentPage={page}
           />
         </PageStateHandler>
 
