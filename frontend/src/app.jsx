@@ -1,15 +1,17 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { AuthProvider } from "./context/AuthContext";
 import { ROUTES } from "./config/routes";
 
 const App = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Navbar />
-        <Routes>
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <Navbar />
+          <Routes>
           {ROUTES.map((route) => {
             const { path, component: Component, isProtected } = route;
             return (
@@ -28,9 +30,10 @@ const App = () => {
               />
             );
           })}
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };
 
