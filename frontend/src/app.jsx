@@ -1,12 +1,8 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
-import HomePage from "./pages/HomePage";
-import BooksPage from "./pages/BooksPage";
-import MembersPage from "./pages/MembersPage";
-import BorrowPage from "./pages/BorrowPage";
-import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
+import { ROUTES } from "./config/routes";
 
 const App = () => {
   return (
@@ -14,39 +10,24 @@ const App = () => {
       <BrowserRouter>
         <Navbar />
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <HomePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/books"
-            element={
-              <ProtectedRoute>
-                <BooksPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/members"
-            element={
-              <ProtectedRoute>
-                <MembersPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/borrow"
-            element={
-              <ProtectedRoute>
-                <BorrowPage />
-              </ProtectedRoute>
-            }
-          />
+          {ROUTES.map((route) => {
+            const { path, component: Component, isProtected } = route;
+            return (
+              <Route
+                key={path}
+                path={path}
+                element={
+                  isProtected ? (
+                    <ProtectedRoute>
+                      <Component />
+                    </ProtectedRoute>
+                  ) : (
+                    <Component />
+                  )
+                }
+              />
+            );
+          })}
         </Routes>
       </BrowserRouter>
     </AuthProvider>
