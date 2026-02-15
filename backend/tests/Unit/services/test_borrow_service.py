@@ -1,316 +1,492 @@
+"""Unit tests for BorrowService business logic.
+
+Tests cover:
+- BorrowService initialization
+- borrow_book() with validation and exception handling
+- get_all_borrows() with pagination and filtering
+- return_borrow() with validation and exception handling
+
+Exception Mapping (from app.common.exceptions):
+- BookNotFoundError: Book does not exist
+- MemberNotFoundError: Member does not exist
+- BorrowNotFoundError: Borrow record does not exist
+- InvalidBorrowError: Business rule violation (unavailable, inactive, already returned)
+"""
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock
 from datetime import datetime
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.services.borrow_service import BorrowService
-from app.schemas.borrow import BorrowBase, BorrowReturnRequest
+from app.schemas.borrow import BorrowBase, BorrowDetailedResponse
 from app.models.borrow import BorrowRecord
+from app.common.exceptions import (
+    BookNotFoundError,
+    MemberNotFoundError,
+    BorrowNotFoundError,
+    InvalidBorrowError,
+)
+
+
+# ============================================================================
+# Test Data Constants
+# ============================================================================
+
+ACTIVE_BORROW_ID = 1
+RETURNED_BORROW_ID = 2
+BOOK_ID = 1
+MEMBER_ID = 1
+DEFAULT_PAGE = 1
+DEFAULT_LIMIT = 10
+
+
+# ============================================================================
+# Fixtures
+# ============================================================================
 
 
 @pytest.fixture
 def mock_db():
     """Mock database session fixture."""
-    return MagicMock()
+    return MagicMock(spec=Session)
 
 
 @pytest.fixture
 def borrow_service(mock_db):
-    """BorrowService fixture."""
-    return BorrowService(mock_db)
+    """BorrowService fixture with mocked repositories."""
+    service = BorrowService(mock_db)
+    # Mock all repositories
+    service.borrow_repository = MagicMock()
+    service.book_repository = MagicMock()
+    service.member_repository = MagicMock()
+    return service
 
 
 @pytest.fixture
-def borrow_base():
-    """Sample BorrowBase fixture."""
-    return BorrowBase(book_id=1, member_id=1)
+def borrow_request_data():
+    """Sample BorrowBase fixture for borrowing."""
+    return BorrowBase(book_id=BOOK_ID, member_id=MEMBER_ID)
 
 
-@pytest.fixture
-def mock_borrow_record():
-    """Mock borrow record fixture."""
-    borrow = BorrowRecord()
-    borrow.id = 1
-    borrow.book_id = 1
-    borrow.member_id = 1
-    borrow.borrowed_at = datetime.utcnow()
-    borrow.returned_at = None
+# ============================================================================
+# Test Data Builders
+# ============================================================================
+
+
+def create_mock_book(book_id: int = BOOK_ID, available: bool = True):
+    """Create a mock book object."""
+    book = MagicMock()
+    book.id = book_id
+    book.title = "Test Book"
+    book.available = available
+    return book
+
+
+def create_mock_member(member_id: int = MEMBER_ID, active: bool = True):
+    """Create a mock member object."""
+    member = MagicMock()
+    member.id = member_id
+    member.name = "Test Member"
+    member.active = active
+    return member
+
+
+def create_mock_borrow_record(
+    borrow_id: int = ACTIVE_BORROW_ID,
+    book_id: int = BOOK_ID,
+    member_id: int = MEMBER_ID,
+    returned_at: datetime = None,
+):
+    """Create a mock borrow record object."""
+    borrow = MagicMock(spec=BorrowRecord)
+    borrow.id = borrow_id
+    borrow.book_id = book_id
+    borrow.member_id = member_id
+    borrow.borrowed_at = datetime(2026, 2, 1)
+    borrow.returned_at = returned_at
     return borrow
 
 
-# Test BorrowService initialization
-def test_borrow_service_initialization_success(mock_db):
-    """Test successful BorrowService initialization."""
-    service = BorrowService(mock_db)
-    assert service.db == mock_db
-    assert service.borrow_repository is not None
-
-
-def test_borrow_service_initialization_with_none_db():
-    """Test BorrowService initialization with None database."""
-    with pytest.raises(ValueError) as exc_info:
-        BorrowService(None)
-    assert "Database session cannot be None" in str(exc_info.value)
-
-
-# Test borrow_book
-def test_borrow_book_success(borrow_service, borrow_base, mock_borrow_record):
-    """Test successful book borrowing."""
-    borrow_service.borrow_repository.create_borrow = MagicMock(
-        return_value=mock_borrow_record)
-
-    result = borrow_service.borrow_book(borrow_base)
-
-    assert result.id == 1
-    assert result.book_id == 1
-    assert result.member_id == 1
-    borrow_service.borrow_repository.create_borrow.assert_called_once_with(
-        borrow_base)
-
-
-def test_borrow_book_validation_error(borrow_service, borrow_base):
-    """Test borrow_book when repository raises ValueError."""
-    borrow_service.borrow_repository.create_borrow = MagicMock(
-        side_effect=ValueError("Book not found")
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        borrow_service.borrow_book(borrow_base)
-    assert "Book not found" in str(exc_info.value)
-
-
-def test_borrow_book_database_error(borrow_service, borrow_base):
-    """Test borrow_book when repository raises SQLAlchemyError."""
-    borrow_service.borrow_repository.create_borrow = MagicMock(
-        side_effect=SQLAlchemyError("Database error")
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        borrow_service.borrow_book(borrow_base)
-    assert "Failed to borrow book from database" in str(exc_info.value)
-
-
-def test_borrow_book_unexpected_error(borrow_service, borrow_base):
-    """Test borrow_book when repository raises unexpected exception."""
-    borrow_service.borrow_repository.create_borrow = MagicMock(
-        side_effect=Exception("Unexpected error")
-    )
-
-    with pytest.raises(Exception):
-        borrow_service.borrow_book(borrow_base)
-
-# Test get_all_borrows
-
-
-def test_get_all_borrows_success_with_all_records(borrow_service):
-    """Test get_all_borrows returns all records when returned=True."""
-    mock_active_borrow = MagicMock(spec=BorrowRecord)
-    mock_active_borrow.id = 1
-    mock_active_borrow.returned_at = None
-
-    mock_returned_borrow = MagicMock(spec=BorrowRecord)
-    mock_returned_borrow.id = 2
-    mock_returned_borrow.returned_at = datetime.utcnow()
-
-    borrow_service.borrow_repository.get_all_borrows = MagicMock(
-        return_value=[mock_active_borrow, mock_returned_borrow]
-    )
-
-    result = borrow_service.get_all_borrows(returned=True)
-
-    assert len(result) == 2
-    assert result[0].id == 1
-    assert result[1].id == 2
-    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=None, book_id=None
+def create_mock_detailed_borrow_response(
+    borrow_id: int = ACTIVE_BORROW_ID,
+    book_id: int = BOOK_ID,
+    member_id: int = MEMBER_ID,
+    returned_at: datetime = None,
+):
+    """Create a mock detailed borrow response for pagination."""
+    return BorrowDetailedResponse(
+        id=borrow_id,
+        book_id=book_id,
+        member_id=member_id,
+        borrowed_at=datetime(2026, 2, 1),
+        returned_at=returned_at,
+        book={
+            "id": book_id,
+            "title": "Test Book",
+            "author": "Test Author",
+            "published_year": 2025,
+        },
+        member={
+            "id": member_id,
+            "name": "Test Member",
+            "email": "test@example.com",
+        },
     )
 
 
-def test_get_all_borrows_success_active_only(borrow_service):
-    """Test get_all_borrows returns only active records when returned=False."""
-    mock_active_borrow = MagicMock(spec=BorrowRecord)
-    mock_active_borrow.id = 1
-    mock_active_borrow.returned_at = None
-
-    borrow_service.borrow_repository.get_all_borrows = MagicMock(
-        return_value=[mock_active_borrow]
-    )
-
-    result = borrow_service.get_all_borrows(returned=False)
-
-    assert len(result) == 1
-    assert result[0].id == 1
-    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        returned=False, member_id=None, book_id=None
-    )
+# ============================================================================
+# BorrowService Initialization Tests
+# ============================================================================
 
 
-def test_get_all_borrows_empty_list(borrow_service):
-    """Test get_all_borrows returns empty list when no records exist."""
-    borrow_service.borrow_repository.get_all_borrows = MagicMock(
-        return_value=[]
-    )
+class TestBorrowServiceInitialization:
+    """Tests for BorrowService.__init__()"""
 
-    result = borrow_service.get_all_borrows(returned=True)
+    def test_success(self, mock_db):
+        """Test successful initialization with valid database session."""
+        service = BorrowService(mock_db)
+        assert service.db == mock_db
+        assert service.borrow_repository is not None
+        assert service.book_repository is not None
+        assert service.member_repository is not None
 
-    assert len(result) == 0
-    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=None, book_id=None
-    )
-
-
-def test_get_all_borrows_database_error(borrow_service):
-    """Test get_all_borrows when repository raises SQLAlchemyError."""
-    borrow_service.borrow_repository.get_all_borrows = MagicMock(
-        side_effect=SQLAlchemyError("Database error")
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        borrow_service.get_all_borrows(returned=True)
-    assert "Failed to retrieve borrow records from database" in str(
-        exc_info.value)
+    def test_fails_with_none_db(self):
+        """Test initialization fails when db is None."""
+        with pytest.raises(ValueError) as exc_info:
+            BorrowService(None)
+        assert "Database session cannot be None" in str(exc_info.value)
 
 
-def test_get_all_borrows_unexpected_error(borrow_service):
-    """Test get_all_borrows when repository raises unexpected exception."""
-    borrow_service.borrow_repository.get_all_borrows = MagicMock(
-        side_effect=Exception("Unexpected error")
-    )
-
-    with pytest.raises(Exception):
-        borrow_service.get_all_borrows(returned=True)
+# ============================================================================
+# borrow_book() Tests
+# ============================================================================
 
 
-def test_get_all_borrows_with_member_filter(borrow_service):
-    """Test get_all_borrows with member_id filter."""
-    mock_borrow = MagicMock(spec=BorrowRecord)
-    mock_borrow.id = 1
-    mock_borrow.member_id = 123
+class TestBorrowBook:
+    """Tests for BorrowService.borrow_book()"""
 
-    borrow_service.borrow_repository.get_all_borrows = MagicMock(
-        return_value=[mock_borrow]
-    )
+    def test_success(self, borrow_service, borrow_request_data):
+        """Test successful book borrowing."""
+        mock_book = create_mock_book(available=True)
+        mock_member = create_mock_member(active=True)
+        mock_borrow = create_mock_borrow_record()
 
-    result = borrow_service.get_all_borrows(member_id=123)
+        borrow_service.book_repository.get_book_by_id.return_value = mock_book
+        borrow_service.member_repository.get_member_by_id.return_value = mock_member
+        borrow_service.borrow_repository.create_borrow.return_value = mock_borrow
 
-    assert len(result) == 1
-    assert result[0].member_id == 123
-    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=123, book_id=None
-    )
+        result = borrow_service.borrow_book(borrow_request_data)
 
+        assert result.id == ACTIVE_BORROW_ID
+        assert result.book_id == BOOK_ID
+        assert result.member_id == MEMBER_ID
+        borrow_service.book_repository.get_book_by_id.assert_called_once_with(
+            BOOK_ID)
+        borrow_service.member_repository.get_member_by_id.assert_called_once_with(
+            MEMBER_ID)
+        borrow_service.borrow_repository.create_borrow.assert_called_once_with(
+            borrow_request_data, mock_book
+        )
 
-def test_get_all_borrows_with_book_filter(borrow_service):
-    """Test get_all_borrows with book_id filter."""
-    mock_borrow = MagicMock(spec=BorrowRecord)
-    mock_borrow.id = 1
-    mock_borrow.book_id = 456
+    def test_book_not_found(self, borrow_service, borrow_request_data):
+        """Test fails when book does not exist."""
+        borrow_service.book_repository.get_book_by_id.return_value = None
 
-    borrow_service.borrow_repository.get_all_borrows = MagicMock(
-        return_value=[mock_borrow]
-    )
+        with pytest.raises(BookNotFoundError) as exc_info:
+            borrow_service.borrow_book(borrow_request_data)
+        assert "Book with id 1 not found" in str(exc_info.value)
+        borrow_service.book_repository.get_book_by_id.assert_called_once_with(
+            BOOK_ID)
 
-    result = borrow_service.get_all_borrows(book_id=456)
+    def test_book_not_available(self, borrow_service, borrow_request_data):
+        """Test fails when book is not available."""
+        mock_book = create_mock_book(available=False)
+        borrow_service.book_repository.get_book_by_id.return_value = mock_book
 
-    assert len(result) == 1
-    assert result[0].book_id == 456
-    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=None, book_id=456
-    )
+        with pytest.raises(InvalidBorrowError) as exc_info:
+            borrow_service.borrow_book(borrow_request_data)
+        assert "not available" in str(exc_info.value)
 
+    def test_member_not_found(self, borrow_service, borrow_request_data):
+        """Test fails when member does not exist."""
+        mock_book = create_mock_book(available=True)
+        borrow_service.book_repository.get_book_by_id.return_value = mock_book
+        borrow_service.member_repository.get_member_by_id.return_value = None
 
-def test_get_all_borrows_with_both_filters(borrow_service):
-    """Test get_all_borrows with both member_id and book_id filters."""
-    mock_borrow = MagicMock(spec=BorrowRecord)
-    mock_borrow.id = 1
-    mock_borrow.member_id = 123
-    mock_borrow.book_id = 456
+        with pytest.raises(MemberNotFoundError) as exc_info:
+            borrow_service.borrow_book(borrow_request_data)
+        assert "Member with id 1 not found" in str(exc_info.value)
 
-    borrow_service.borrow_repository.get_all_borrows = MagicMock(
-        return_value=[mock_borrow]
-    )
+    def test_member_not_active(self, borrow_service, borrow_request_data):
+        """Test fails when member is inactive."""
+        mock_book = create_mock_book(available=True)
+        mock_member = create_mock_member(active=False)
+        borrow_service.book_repository.get_book_by_id.return_value = mock_book
+        borrow_service.member_repository.get_member_by_id.return_value = mock_member
 
-    result = borrow_service.get_all_borrows(member_id=123, book_id=456)
-
-    assert len(result) == 1
-    assert result[0].member_id == 123
-    assert result[0].book_id == 456
-    borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=123, book_id=456
-    )
-
-# Test return_borrow
-
-
-def test_return_borrow_success(borrow_service):
-    """Test successful book return."""
-    mock_returned_borrow = MagicMock(spec=BorrowRecord)
-    mock_returned_borrow.id = 1
-    mock_returned_borrow.book_id = 1
-    mock_returned_borrow.member_id = 1
-    mock_returned_borrow.returned_at = datetime.utcnow()
-
-    borrow_service.borrow_repository.return_borrow = MagicMock(
-        return_value=mock_returned_borrow
-    )
-
-    result = borrow_service.return_borrow(1)
-
-    assert result.id == 1
-    assert result.returned_at is not None
-    borrow_service.borrow_repository.return_borrow.assert_called_once_with(1)
+        with pytest.raises(InvalidBorrowError) as exc_info:
+            borrow_service.borrow_book(borrow_request_data)
+        assert "not active" in str(exc_info.value)
 
 
-def test_return_borrow_not_found(borrow_service):
-    """Test return_borrow when borrow record does not exist."""
-    borrow_service.borrow_repository.return_borrow = MagicMock(
-        side_effect=ValueError("Borrow record with id 999 not found")
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        borrow_service.return_borrow(999)
-    assert "not found" in str(exc_info.value)
+# ============================================================================
+# get_all_borrows() Tests
+# ============================================================================
 
 
-def test_return_borrow_already_returned(borrow_service):
-    """Test return_borrow when book was already returned."""
-    borrow_service.borrow_repository.return_borrow = MagicMock(
-        side_effect=ValueError(
-            "Borrow record with id 1 has already been returned")
-    )
+class TestGetAllBorrows:
+    """Tests for BorrowService.get_all_borrows()"""
 
-    with pytest.raises(ValueError) as exc_info:
-        borrow_service.return_borrow(1)
-    assert "already been returned" in str(exc_info.value)
+    def test_success_default_parameters(self, borrow_service):
+        """Test successful retrieval with default parameters."""
+        mock_borrow = create_mock_borrow_record()
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            [mock_borrow],
+            1,
+        )
+
+        result = borrow_service.get_all_borrows()
+
+        assert "data" in result
+        assert "pagination" in result
+        assert len(result["data"]) == 1
+        assert result["pagination"]["total"] == 1
+        assert result["pagination"]["page"] == DEFAULT_PAGE
+        assert result["pagination"]["limit"] == DEFAULT_LIMIT
+        assert result["pagination"]["pages"] == 1
+
+    def test_success_with_returned_true(self, borrow_service):
+        """Test retrieval includes both active and returned borrows."""
+        active_borrow = create_mock_borrow_record()
+        returned_borrow = create_mock_borrow_record(
+            borrow_id=RETURNED_BORROW_ID,
+            returned_at=datetime(2026, 2, 10),
+        )
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            [active_borrow, returned_borrow],
+            2,
+        )
+
+        result = borrow_service.get_all_borrows(returned=True)
+
+        assert len(result["data"]) == 2
+        assert result["data"][0].returned_at is None
+        assert result["data"][1].returned_at is not None
+        borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=None,
+            book_id=None,
+            offset=0,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_success_with_returned_false(self, borrow_service):
+        """Test retrieval returns only active borrows."""
+        mock_borrow = create_mock_borrow_record()
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            [mock_borrow],
+            1,
+        )
+
+        result = borrow_service.get_all_borrows(returned=False)
+
+        assert len(result["data"]) == 1
+        assert result["data"][0].returned_at is None
+        borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+            returned=False,
+            member_id=None,
+            book_id=None,
+            offset=0,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_success_empty_result(self, borrow_service):
+        """Test retrieval returns empty list with correct pagination."""
+        borrow_service.borrow_repository.get_all_borrows.return_value = ([], 0)
+
+        result = borrow_service.get_all_borrows()
+
+        assert len(result["data"]) == 0
+        assert result["pagination"]["total"] == 0
+        assert result["pagination"]["pages"] == 0
+
+    def test_success_with_member_filter(self, borrow_service):
+        """Test retrieval with member_id filter."""
+        mock_borrow = create_mock_borrow_record(member_id=123)
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            [mock_borrow],
+            1,
+        )
+
+        result = borrow_service.get_all_borrows(member_id=123)
+
+        assert result["data"][0].member_id == 123
+        borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=123,
+            book_id=None,
+            offset=0,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_success_with_book_filter(self, borrow_service):
+        """Test retrieval with book_id filter."""
+        mock_borrow = create_mock_borrow_record(book_id=456)
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            [mock_borrow],
+            1,
+        )
+
+        result = borrow_service.get_all_borrows(book_id=456)
+
+        assert result["data"][0].book_id == 456
+        borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=None,
+            book_id=456,
+            offset=0,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_success_with_both_filters(self, borrow_service):
+        """Test retrieval with both member and book filters."""
+        mock_borrow = create_mock_borrow_record(
+            member_id=123, book_id=456
+        )
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            [mock_borrow],
+            1,
+        )
+
+        result = borrow_service.get_all_borrows(member_id=123, book_id=456)
+
+        assert result["data"][0].member_id == 123
+        assert result["data"][0].book_id == 456
+
+    def test_success_pagination_multiple_pages(self, borrow_service):
+        """Test pagination calculation with multiple pages."""
+        borrows = [create_mock_borrow_record() for _ in range(10)]
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            borrows,
+            25,
+        )
+
+        result = borrow_service.get_all_borrows(page=1, limit=10)
+
+        assert result["pagination"]["total"] == 25
+        assert result["pagination"]["page"] == 1
+        assert result["pagination"]["limit"] == 10
+        assert result["pagination"]["pages"] == 3
+        borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=None,
+            book_id=None,
+            offset=0,
+            limit=10,
+        )
+
+    def test_success_pagination_second_page(self, borrow_service):
+        """Test pagination on second page with correct offset."""
+        mock_borrow = create_mock_borrow_record()
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            [mock_borrow],
+            25,
+        )
+
+        result = borrow_service.get_all_borrows(page=2, limit=10)
+
+        assert result["pagination"]["page"] == 2
+        borrow_service.borrow_repository.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=None,
+            book_id=None,
+            offset=10,
+            limit=10,
+        )
+
+    def test_fails_when_page_exceeds_total(self, borrow_service):
+        """Test fails when page number exceeds total pages."""
+        borrow_service.borrow_repository.get_all_borrows.return_value = ([], 5)
+
+        with pytest.raises(InvalidBorrowError) as exc_info:
+            borrow_service.get_all_borrows(page=3, limit=10)
+        assert "exceeds total pages" in str(exc_info.value)
+
+    def test_success_when_page_equals_total(self, borrow_service):
+        """Test succeeds when page number equals total pages."""
+        mock_borrow = create_mock_borrow_record()
+        borrow_service.borrow_repository.get_all_borrows.return_value = (
+            [mock_borrow],
+            5,
+        )
+
+        result = borrow_service.get_all_borrows(page=1, limit=10)
+
+        assert result["pagination"]["pages"] == 1
+        assert result["pagination"]["page"] == 1
 
 
-def test_return_borrow_book_not_found(borrow_service):
-    """Test return_borrow when associated book does not exist."""
-    borrow_service.borrow_repository.return_borrow = MagicMock(
-        side_effect=ValueError("Book with id 999 not found")
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        borrow_service.return_borrow(1)
-    assert "not found" in str(exc_info.value)
+# ============================================================================
+# return_borrow() Tests
+# ============================================================================
 
 
-def test_return_borrow_database_error(borrow_service):
-    """Test return_borrow when repository raises SQLAlchemyError."""
-    borrow_service.borrow_repository.return_borrow = MagicMock(
-        side_effect=SQLAlchemyError("Database error")
-    )
+class TestReturnBorrow:
+    """Tests for BorrowService.return_borrow()"""
 
-    with pytest.raises(ValueError) as exc_info:
-        borrow_service.return_borrow(1)
-    assert "Failed to return book to database" in str(exc_info.value)
+    def test_success(self, borrow_service):
+        """Test successful book return."""
+        mock_borrow = create_mock_borrow_record(
+            returned_at=datetime(2026, 2, 10)
+        )
+        mock_book = create_mock_book()
+        borrow_service.borrow_repository.get_borrow_by_id.return_value = (
+            create_mock_borrow_record()
+        )
+        borrow_service.book_repository.get_book_by_id.return_value = mock_book
+        borrow_service.borrow_repository.return_borrow.return_value = mock_borrow
 
+        result = borrow_service.return_borrow(ACTIVE_BORROW_ID)
 
-def test_return_borrow_unexpected_error(borrow_service):
-    """Test return_borrow when repository raises unexpected exception."""
-    borrow_service.borrow_repository.return_borrow = MagicMock(
-        side_effect=Exception("Unexpected error")
-    )
+        assert result.id == ACTIVE_BORROW_ID
+        assert result.returned_at is not None
+        borrow_service.borrow_repository.get_borrow_by_id.assert_called_once_with(
+            ACTIVE_BORROW_ID
+        )
+        borrow_service.book_repository.get_book_by_id.assert_called_once_with(
+            BOOK_ID
+        )
+        borrow_service.borrow_repository.return_borrow.assert_called_once()
 
-    with pytest.raises(Exception):
-        borrow_service.return_borrow(1)
+    def test_borrow_not_found(self, borrow_service):
+        """Test fails when borrow record does not exist."""
+        borrow_service.borrow_repository.get_borrow_by_id.return_value = None
+
+        with pytest.raises(BorrowNotFoundError) as exc_info:
+            borrow_service.return_borrow(999)
+        assert "Borrow record with id 999 not found" in str(exc_info.value)
+
+    def test_already_returned(self, borrow_service):
+        """Test fails when book was already returned."""
+        mock_borrow = create_mock_borrow_record(
+            returned_at=datetime(2026, 2, 5)
+        )
+        borrow_service.borrow_repository.get_borrow_by_id.return_value = (
+            mock_borrow
+        )
+
+        with pytest.raises(InvalidBorrowError) as exc_info:
+            borrow_service.return_borrow(ACTIVE_BORROW_ID)
+        assert "already been returned" in str(exc_info.value)
+
+    def test_associated_book_not_found(self, borrow_service):
+        """Test fails when associated book does not exist."""
+        mock_borrow = create_mock_borrow_record()
+        borrow_service.borrow_repository.get_borrow_by_id.return_value = (
+            mock_borrow
+        )
+        borrow_service.book_repository.get_book_by_id.return_value = None
+
+        with pytest.raises(BookNotFoundError) as exc_info:
+            borrow_service.return_borrow(ACTIVE_BORROW_ID)
+        assert "Book with id 1 not found" in str(exc_info.value)

@@ -1,13 +1,56 @@
+"""Unit tests for Borrow API endpoints.
+
+Tests cover:
+- GET /api/v1/borrow/ with various filters and pagination
+- POST /api/v1/borrow/ for creating borrow records
+- PATCH /api/v1/borrow/{borrow_id}/return for returning books
+
+Exception Mapping (from app.common.exceptions):
+- BookNotFoundError → HTTP 404
+- MemberNotFoundError → HTTP 404
+- BorrowNotFoundError → HTTP 404
+- InvalidBorrowError → HTTP 400
+- DatabaseError → HTTP 500
+"""
 import pytest
-from unittest.mock import MagicMock, patch
-from fastapi import HTTPException, status
+from unittest.mock import MagicMock
+from fastapi import status
 from fastapi.testclient import TestClient
 from datetime import datetime
 
 from app.main import app
-from app.schemas.borrow import BorrowResponse, BorrowRequest, BorrowDetailedResponse
+from app.schemas.borrow import (
+    BorrowResponse,
+    BorrowRequest,
+    BorrowDetailedResponse,
+    PaginatedBorrowDetailedResponse,
+)
 from app.services.borrow_service import BorrowService
 from app.api.v1.borrow import get_borrow_service
+from app.common.exceptions import (
+    BookNotFoundError,
+    MemberNotFoundError,
+    BorrowNotFoundError,
+    InvalidBorrowError,
+    DatabaseError,
+)
+
+
+# ============================================================================
+# Test Data Constants
+# ============================================================================
+
+ACTIVE_BORROW_ID = 1
+RETURNED_BORROW_ID = 2
+DEFAULT_MEMBER_ID = 1
+DEFAULT_BOOK_ID = 1
+DEFAULT_PAGE = 1
+DEFAULT_LIMIT = 10
+
+
+# ============================================================================
+# Fixtures
+# ============================================================================
 
 
 @pytest.fixture
@@ -30,402 +73,541 @@ def clear_overrides():
 
 
 @pytest.fixture
-def mock_borrow_response():
-    """Mock borrow response fixture."""
+def mock_borrow_service():
+    """Create a mock BorrowService instance."""
+    return MagicMock(spec=BorrowService)
+
+
+# ============================================================================
+# Test Data Builders
+# ============================================================================
+
+
+def create_borrow_response(
+    borrow_id: int = ACTIVE_BORROW_ID,
+    book_id: int = DEFAULT_BOOK_ID,
+    member_id: int = DEFAULT_MEMBER_ID,
+    borrowed_at: datetime = None,
+    returned_at: datetime = None,
+) -> BorrowResponse:
+    """Create a BorrowResponse object for testing."""
     return BorrowResponse(
-        id=1,
-        book_id=1,
-        member_id=1,
-        borrowed_at=datetime.utcnow(),
-        returned_at=None
+        id=borrow_id,
+        book_id=book_id,
+        member_id=member_id,
+        borrowed_at=borrowed_at or datetime(2026, 2, 1),
+        returned_at=returned_at,
     )
+
+
+def create_borrow_detailed_response(
+    borrow_id: int = ACTIVE_BORROW_ID,
+    book_id: int = DEFAULT_BOOK_ID,
+    member_id: int = DEFAULT_MEMBER_ID,
+    borrowed_at: datetime = None,
+    returned_at: datetime = None,
+    book_title: str = "Test Book",
+    book_author: str = "Test Author",
+    member_name: str = "Test Member",
+    member_email: str = "test@example.com",
+) -> BorrowDetailedResponse:
+    """Create a BorrowDetailedResponse object for testing."""
+    return BorrowDetailedResponse(
+        id=borrow_id,
+        book_id=book_id,
+        member_id=member_id,
+        borrowed_at=borrowed_at or datetime(2026, 2, 1),
+        returned_at=returned_at,
+        book={
+            "id": book_id,
+            "title": book_title,
+            "author": book_author,
+            "published_year": 2025,
+        },
+        member={
+            "id": member_id,
+            "name": member_name,
+            "email": member_email,
+        },
+    )
+
+
+def create_paginated_borrow_response(
+    data: list[BorrowDetailedResponse],
+    page: int = DEFAULT_PAGE,
+    limit: int = DEFAULT_LIMIT,
+    total: int = None,
+) -> PaginatedBorrowDetailedResponse:
+    """Create a PaginatedBorrowDetailedResponse object for testing."""
+    if total is None:
+        total = len(data)
+    pages = (total + limit - 1) // limit
+    return PaginatedBorrowDetailedResponse(
+        data=data,
+        pagination={
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        },
+    )
+
+
+# ============================================================================
+# Fixture Shortcuts for Common Test Cases
+# ============================================================================
+
+
+@pytest.fixture
+def mock_borrow_response():
+    """Mock simple borrow response fixture."""
+    return create_borrow_response()
 
 
 @pytest.fixture
 def mock_borrow_detailed_response():
     """Mock detailed borrow response fixture."""
-    return BorrowDetailedResponse(
-        id=1,
-        book_id=1,
-        member_id=1,
-        borrowed_at=datetime.utcnow(),
-        returned_at=None,
-        book={
-            "id": 1,
-            "title": "Test Book",
-            "author": "Test Author",
-            "published_year": 2025
-        },
-        member={
-            "id": 1,
-            "name": "Test Member",
-            "email": "test@example.com"
-        }
-    )
+    return create_borrow_detailed_response()
 
 
 @pytest.fixture
 def mock_returned_borrow_response():
     """Mock returned borrow response fixture."""
-    return BorrowDetailedResponse(
-        id=2,
+    return create_borrow_detailed_response(
+        borrow_id=RETURNED_BORROW_ID,
         book_id=2,
         member_id=2,
         borrowed_at=datetime(2026, 1, 1),
         returned_at=datetime(2026, 2, 1),
-        book={
-            "id": 2,
-            "title": "Returned Book",
-            "author": "Author Name",
-            "published_year": 2021
-        },
-        member={
-            "id": 2,
-            "name": "Another Member",
-            "email": "another@example.com"
-        }
+        book_title="Returned Book",
+        book_author="Author Name",
+        member_name="Another Member",
+        member_email="another@example.com",
     )
 
 
-# Test get_borrow_service dependency
-def test_get_borrow_service_success(mock_db):
-    """Test successful initialization of BorrowService."""
-    with patch('app.api.v1.borrow.BorrowService') as mock_service_class:
+# ============================================================================
+# POST /api/v1/borrow/ - Borrow Book Tests
+# ============================================================================
+
+
+class TestBorrowBook:
+    """Tests for POST /api/v1/borrow/ endpoint."""
+
+    def test_success(self, client, mock_borrow_response, mock_borrow_service):
+        """Test successful book borrowing."""
+        mock_borrow_service.borrow_book.return_value = mock_borrow_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.post(
+            "/api/v1/borrow/", json={"book_id": 1, "member_id": 1})
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["id"] == ACTIVE_BORROW_ID
+        assert data["book_id"] == DEFAULT_BOOK_ID
+        assert data["member_id"] == DEFAULT_MEMBER_ID
+        assert data["returned_at"] is None
+        mock_borrow_service.borrow_book.assert_called_once()
+
+    def test_book_not_found(self, client, mock_borrow_service):
+        """Test borrowing when book does not exist (404)."""
+        mock_borrow_service.borrow_book.side_effect = BookNotFoundError(
+            "Book with id 999 not found"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.post(
+            "/api/v1/borrow/", json={"book_id": 999, "member_id": 1}
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "not found" in response.json()["detail"]
+
+    def test_book_not_available(self, client, mock_borrow_service):
+        """Test borrowing when book is not available (400)."""
+        mock_borrow_service.borrow_book.side_effect = InvalidBorrowError(
+            "Book with id 1 is not available"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.post(
+            "/api/v1/borrow/", json={"book_id": 1, "member_id": 1})
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "not available" in response.json()["detail"]
+
+    def test_member_not_found(self, client, mock_borrow_service):
+        """Test borrowing when member does not exist (404)."""
+        mock_borrow_service.borrow_book.side_effect = MemberNotFoundError(
+            "Member with id 999 not found"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.post(
+            "/api/v1/borrow/", json={"book_id": 1, "member_id": 999}
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "not found" in response.json()["detail"]
+
+    def test_member_not_active(self, client, mock_borrow_service):
+        """Test borrowing when member is not active (400)."""
+        mock_borrow_service.borrow_book.side_effect = InvalidBorrowError(
+            "Member with id 1 is not active"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.post(
+            "/api/v1/borrow/", json={"book_id": 1, "member_id": 1})
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "not active" in response.json()["detail"]
+
+    def test_database_error(self, client, mock_borrow_service):
+        """Test borrowing when database error occurs (500)."""
+        mock_borrow_service.borrow_book.side_effect = DatabaseError(
+            "Database connection failed"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.post(
+            "/api/v1/borrow/", json={"book_id": 1, "member_id": 1})
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Database operation failed" in response.json()["detail"]
+
+
+# ============================================================================
+# GET /api/v1/borrow/ - Get All Borrows Tests
+# ============================================================================
+
+
+class TestGetAllBorrows:
+    """Tests for GET /api/v1/borrow/ endpoint."""
+
+    def test_default_parameters(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test getting borrows with default parameters."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response]
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "data" in data
+        assert "pagination" in data
+        assert len(data["data"]) == 1
+        assert data["pagination"]["page"] == DEFAULT_PAGE
+        assert data["pagination"]["limit"] == DEFAULT_LIMIT
+        mock_borrow_service.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=None,
+            book_id=None,
+            page=DEFAULT_PAGE,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_returned_true(self, client, mock_borrow_detailed_response, mock_returned_borrow_response, mock_borrow_service):
+        """Test getting all borrows with returned=True."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response,
+                  mock_returned_borrow_response],
+            total=2,
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/?returned=true")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["data"]) == 2
+        assert data["data"][0]["returned_at"] is None
+        assert data["data"][1]["returned_at"] is not None
+
+    def test_returned_false(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test getting only active borrows with returned=False."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response]
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/?returned=false")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["data"]) == 1
+        assert data["data"][0]["returned_at"] is None
+        mock_borrow_service.get_all_borrows.assert_called_once_with(
+            returned=False,
+            member_id=None,
+            book_id=None,
+            page=DEFAULT_PAGE,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_empty_result(self, client, mock_borrow_service):
+        """Test getting borrows when no records exist."""
+        paginated_response = create_paginated_borrow_response(data=[], total=0)
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["data"]) == 0
+        assert data["pagination"]["total"] == 0
+
+    def test_with_member_filter(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test getting borrows filtered by member_id."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response]
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/?member_id=123")
+
+        assert response.status_code == status.HTTP_200_OK
+        mock_borrow_service.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=123,
+            book_id=None,
+            page=DEFAULT_PAGE,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_with_book_filter(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test getting borrows filtered by book_id."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response]
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/?book_id=456")
+
+        assert response.status_code == status.HTTP_200_OK
+        mock_borrow_service.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=None,
+            book_id=456,
+            page=DEFAULT_PAGE,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_with_both_filters(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test getting borrows filtered by both member_id and book_id."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response]
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/?member_id=123&book_id=456")
+
+        assert response.status_code == status.HTTP_200_OK
+        mock_borrow_service.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=123,
+            book_id=456,
+            page=DEFAULT_PAGE,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_with_all_filters(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test getting borrows with all filters combined."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response]
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get(
+            "/api/v1/borrow/?returned=false&member_id=123&book_id=456"
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        mock_borrow_service.get_all_borrows.assert_called_once_with(
+            returned=False,
+            member_id=123,
+            book_id=456,
+            page=DEFAULT_PAGE,
+            limit=DEFAULT_LIMIT,
+        )
+
+    def test_pagination_first_page(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test pagination on first page."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response],
+            page=1,
+            limit=10,
+            total=25,
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/?page=1&limit=10")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["pagination"]["page"] == 1
+        assert data["pagination"]["limit"] == 10
+        assert data["pagination"]["total"] == 25
+        assert data["pagination"]["pages"] == 3
+
+    def test_pagination_second_page(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test pagination on second page."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response],
+            page=2,
+            limit=10,
+            total=25,
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/?page=2&limit=10")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["pagination"]["page"] == 2
+        mock_borrow_service.get_all_borrows.assert_called_once_with(
+            returned=True,
+            member_id=None,
+            book_id=None,
+            page=2,
+            limit=10,
+        )
+
+    def test_pagination_custom_limit(self, client, mock_borrow_detailed_response, mock_borrow_service):
+        """Test pagination with custom limit."""
+        paginated_response = create_paginated_borrow_response(
+            data=[mock_borrow_detailed_response],
+            page=1,
+            limit=25,
+            total=25,
+        )
+        mock_borrow_service.get_all_borrows.return_value = paginated_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/?limit=25")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["pagination"]["limit"] == 25
+
+    def test_validation_error(self, client, mock_borrow_service):
+        """Test get_all_borrows when service raises InvalidBorrowError (400)."""
+        mock_borrow_service.get_all_borrows.side_effect = InvalidBorrowError(
+            "Page 10 exceeds total pages 2"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "exceeds total pages" in response.json()["detail"]
+
+    def test_database_error(self, client, mock_borrow_service):
+        """Test get_all_borrows when database error occurs (500)."""
+        mock_borrow_service.get_all_borrows.side_effect = DatabaseError(
+            "Database connection failed"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.get("/api/v1/borrow/")
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Database operation failed" in response.json()["detail"]
+
+
+# ============================================================================
+# PATCH /api/v1/borrow/{borrow_id}/return - Return Book Tests
+# ============================================================================
+
+
+class TestReturnBook:
+    """Tests for PATCH /api/v1/borrow/{borrow_id}/return endpoint."""
+
+    def test_success(self, client, mock_returned_borrow_response, mock_borrow_service):
+        """Test successful book return."""
+        mock_borrow_service.return_borrow.return_value = mock_returned_borrow_response
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.patch("/api/v1/borrow/1/return")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["id"] == RETURNED_BORROW_ID
+        assert data["returned_at"] is not None
+        mock_borrow_service.return_borrow.assert_called_once_with(1)
+
+    def test_borrow_not_found(self, client, mock_borrow_service):
+        """Test returning when borrow record does not exist (404)."""
+        mock_borrow_service.return_borrow.side_effect = BorrowNotFoundError(
+            "Borrow record with id 999 not found"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.patch("/api/v1/borrow/999/return")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "not found" in response.json()["detail"]
+
+    def test_already_returned(self, client, mock_borrow_service):
+        """Test returning a book that was already returned (400)."""
+        mock_borrow_service.return_borrow.side_effect = InvalidBorrowError(
+            "Borrow record with id 1 has already been returned"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.patch("/api/v1/borrow/1/return")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "already been returned" in response.json()["detail"]
+
+    def test_associated_book_not_found(self, client, mock_borrow_service):
+        """Test return when associated book does not exist (404)."""
+        mock_borrow_service.return_borrow.side_effect = BookNotFoundError(
+            "Book with id 999 not found"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.patch("/api/v1/borrow/1/return")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "not found" in response.json()["detail"]
+
+    def test_database_error(self, client, mock_borrow_service):
+        """Test returning when database error occurs (500)."""
+        mock_borrow_service.return_borrow.side_effect = DatabaseError(
+            "Database connection failed"
+        )
+        app.dependency_overrides[get_borrow_service] = lambda: mock_borrow_service
+
+        response = client.patch("/api/v1/borrow/1/return")
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Database operation failed" in response.json()["detail"]
+
+
+# ============================================================================
+# Test get_borrow_service Dependency Injection
+# ============================================================================
+
+
+class TestGetBorrowService:
+    """Tests for get_borrow_service dependency injection function."""
+
+    def test_service_initialization(self, mock_db):
+        """Test that BorrowService is initialized with the database session."""
         service = get_borrow_service(mock_db)
-        mock_service_class.assert_called_once_with(mock_db)
-
-
-def test_get_borrow_service_initialization_error(mock_db):
-    """Test get_borrow_service when BorrowService initialization fails."""
-    with patch('app.api.v1.borrow.BorrowService') as mock_service_class:
-        mock_service_class.side_effect = Exception("Service init failed")
-
-        with pytest.raises(HTTPException) as exc_info:
-            get_borrow_service(mock_db)
-
-        assert exc_info.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert exc_info.value.detail == "Failed to initialize borrow service"
-
-
-# Test borrow_book endpoint
-def test_borrow_book_success(client, mock_borrow_response):
-    """Test successful book borrowing."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.borrow_book.return_value = mock_borrow_response
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    borrow_request = {"book_id": 1, "member_id": 1}
-    response = client.post("/api/v1/borrow/", json=borrow_request)
-
-    assert response.status_code == status.HTTP_200_OK
-    assert response.json()["id"] == 1
-    assert response.json()["book_id"] == 1
-    assert response.json()["member_id"] == 1
-    assert response.json()["returned_at"] is None
-    mock_service.borrow_book.assert_called_once()
-
-
-def test_borrow_book_not_found(client):
-    """Test borrowing when book does not exist."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.borrow_book.side_effect = ValueError(
-        "Book with id 999 not found")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    borrow_request = {"book_id": 999, "member_id": 1}
-    response = client.post("/api/v1/borrow/", json=borrow_request)
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "not found" in response.json()["detail"]
-
-
-def test_borrow_book_not_available(client):
-    """Test borrowing when book is not available."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.borrow_book.side_effect = ValueError(
-        "Book with id 1 is not available")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    borrow_request = {"book_id": 1, "member_id": 1}
-    response = client.post("/api/v1/borrow/", json=borrow_request)
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "not available" in response.json()["detail"]
-
-
-def test_borrow_book_member_not_found(client):
-    """Test borrowing when member does not exist."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.borrow_book.side_effect = ValueError(
-        "Member with id 999 not found")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    borrow_request = {"book_id": 1, "member_id": 999}
-    response = client.post("/api/v1/borrow/", json=borrow_request)
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "not found" in response.json()["detail"]
-
-
-def test_borrow_book_member_not_active(client):
-    """Test borrowing when member is not active."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.borrow_book.side_effect = ValueError(
-        "Member with id 1 is not active")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    borrow_request = {"book_id": 1, "member_id": 1}
-    response = client.post("/api/v1/borrow/", json=borrow_request)
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "not active" in response.json()["detail"]
-
-
-def test_borrow_book_database_error(client):
-    """Test borrowing when database error occurs."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.borrow_book.side_effect = Exception(
-        "Database connection failed")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    borrow_request = {"book_id": 1, "member_id": 1}
-    response = client.post("/api/v1/borrow/", json=borrow_request)
-
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert "Failed to borrow book" in response.json()["detail"]
-
-
-# Test get_all_borrows endpoint
-def test_get_all_borrows_default_returned(client, mock_borrow_detailed_response, mock_returned_borrow_response):
-    """Test getting all borrows with returned=True (default)."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.return_value = [
-        mock_borrow_detailed_response,
-        mock_returned_borrow_response
-    ]
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 2
-    assert data[0]["id"] == 1
-    assert data[0]["returned_at"] is None
-    assert data[1]["id"] == 2
-    assert data[1]["returned_at"] is not None
-    mock_service.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=None, book_id=None)
-
-
-def test_get_all_borrows_with_returned_true(client, mock_borrow_detailed_response, mock_returned_borrow_response):
-    """Test getting all borrows with returned=True explicitly."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.return_value = [
-        mock_borrow_detailed_response,
-        mock_returned_borrow_response
-    ]
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/?returned=true")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 2
-    mock_service.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=None, book_id=None)
-
-
-def test_get_all_borrows_with_returned_false(client, mock_borrow_detailed_response):
-    """Test getting only active borrows with returned=False."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.return_value = [
-        mock_borrow_detailed_response
-    ]
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/?returned=false")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["id"] == 1
-    assert data[0]["returned_at"] is None
-    mock_service.get_all_borrows.assert_called_once_with(
-        returned=False, member_id=None, book_id=None)
-
-
-def test_get_all_borrows_empty_list(client):
-    """Test getting borrows when no records exist."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.return_value = []
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 0
-    mock_service.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=None, book_id=None)
-
-
-def test_get_all_borrows_validation_error(client):
-    """Test get_all_borrows when service raises ValueError."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.side_effect = ValueError(
-        "Failed to retrieve borrow records")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/")
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Failed to retrieve borrow records" in response.json()["detail"]
-
-
-def test_get_all_borrows_database_error(client):
-    """Test get_all_borrows when service raises generic Exception."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.side_effect = Exception(
-        "Database connection failed")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/")
-
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert "Failed to retrieve borrow records" in response.json()["detail"]
-
-
-# Test return_book endpoint
-def test_return_book_success(client, mock_returned_borrow_response):
-    """Test successful book return."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.return_borrow.return_value = mock_returned_borrow_response
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.patch("/api/v1/borrow/1/return")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert data["id"] == 2
-    assert data["book_id"] == 2
-    assert data["member_id"] == 2
-    assert data["returned_at"] is not None
-    mock_service.return_borrow.assert_called_once_with(1)
-
-
-def test_return_book_not_found(client):
-    """Test returning when borrow record does not exist."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.return_borrow.side_effect = ValueError(
-        "Borrow record with id 999 not found")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.patch("/api/v1/borrow/999/return")
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "not found" in response.json()["detail"]
-
-
-def test_return_book_already_returned(client):
-    """Test returning a book that was already returned."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.return_borrow.side_effect = ValueError(
-        "Borrow record with id 1 has already been returned")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.patch("/api/v1/borrow/1/return")
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "already been returned" in response.json()["detail"]
-
-
-def test_return_book_book_not_found(client):
-    """Test return when associated book does not exist (edge case)."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.return_borrow.side_effect = ValueError(
-        "Book with id 999 not found")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.patch("/api/v1/borrow/1/return")
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "not found" in response.json()["detail"]
-
-
-def test_return_book_database_error(client):
-    """Test returning when database error occurs."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.return_borrow.side_effect = Exception(
-        "Database connection failed")
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.patch("/api/v1/borrow/1/return")
-
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert "Failed to return book" in response.json()["detail"]
-
-
-def test_get_all_borrows_with_member_filter(client, mock_borrow_detailed_response):
-    """Test getting borrows filtered by member_id."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.return_value = [mock_borrow_detailed_response]
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/?member_id=123")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 1
-    mock_service.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=123, book_id=None
-    )
-
-
-def test_get_all_borrows_with_book_filter(client, mock_borrow_detailed_response):
-    """Test getting borrows filtered by book_id."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.return_value = [mock_borrow_detailed_response]
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/?book_id=456")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 1
-    mock_service.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=None, book_id=456
-    )
-
-
-def test_get_all_borrows_with_both_filters(client, mock_borrow_detailed_response):
-    """Test getting borrows filtered by both member_id and book_id."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.return_value = [mock_borrow_detailed_response]
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get("/api/v1/borrow/?member_id=123&book_id=456")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 1
-    mock_service.get_all_borrows.assert_called_once_with(
-        returned=True, member_id=123, book_id=456
-    )
-
-
-def test_get_all_borrows_with_all_filters(client, mock_borrow_detailed_response):
-    """Test getting borrows with all filters combined."""
-    mock_service = MagicMock(spec=BorrowService)
-    mock_service.get_all_borrows.return_value = [mock_borrow_detailed_response]
-    app.dependency_overrides[get_borrow_service] = lambda: mock_service
-
-    response = client.get(
-        "/api/v1/borrow/?returned=false&member_id=123&book_id=456")
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 1
-    mock_service.get_all_borrows.assert_called_once_with(
-        returned=False, member_id=123, book_id=456
-    )
+        assert service is not None
+        assert isinstance(service, BorrowService)
