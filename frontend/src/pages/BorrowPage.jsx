@@ -84,9 +84,13 @@ const BorrowPage = () => {
           getBooks(1, 100), // Fetch with high limit to get all books
           getMembers(1, 100) // Fetch with high limit to get all members
         ]);
-        // Extract data from paginated responses
-        setBooks(booksResponse.data || booksResponse);
-        setMembers(membersResponse.data || membersResponse);
+        
+        // Extract data arrays from paginated responses
+        const booksList = booksResponse.data || booksResponse || [];
+        const membersList = membersResponse.data || membersResponse || [];
+        
+        setBooks(booksList);
+        setMembers(membersList);
       } catch (error) {
         console.error("Error fetching filter data:", error);
       } finally {
