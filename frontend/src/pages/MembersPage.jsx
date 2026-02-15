@@ -29,7 +29,7 @@ const MembersPage = () => {
   const [notificationType, setNotificationType] = useState("info");
 
   const columns = [
-    { field: "id", headerName: "ID" },
+    { field: "id", headerName: "Sr. No." },
     { field: "name", headerName: "Name" },
     { field: "email", headerName: "Email" },
     { field: "phone", headerName: "Phone" },

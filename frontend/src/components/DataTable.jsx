@@ -67,17 +67,27 @@ const DataTable = ({
             {columns.map((col) => (
               <TableCell key={col.field}>{col.headerName}</TableCell>
             ))}
-            {actionList.length > 0 && <TableCell>Actions</TableCell>}
+            {actionList.length > 0 && <TableCell sx={{ width: 200 }}>Actions</TableCell>}
           </TableRow>
         </TableHead>
         <TableBody>
           {rows.length > 0 ? (
-            rows.map((row) => (
+            rows.map((row, index) => {
+              // Calculate serial number: (page - 1) * pageSize + index + 1
+              const startingSerialNumber = (currentPage - 1) * rowsPerPage + index + 1;
+              
+              return (
               <TableRow key={row.id}>
                 {columns.map((col) => {
-                  const value = col.field
+                  let value = col.field
                     .split(".")
                     .reduce((acc, key) => acc[key], row);
+                  
+                  // Replace id column with serial number
+                  if (col.field === "id") {
+                    value = startingSerialNumber;
+                  }
+                  
                   return (
                     <TableCell key={col.field}>
                       {col.render ? col.render(value, row) : value}
@@ -105,7 +115,8 @@ const DataTable = ({
                   </TableCell>
                 )}
               </TableRow>
-            ))
+            );
+            })
           ) : (
             <TableRow>
               <TableCell

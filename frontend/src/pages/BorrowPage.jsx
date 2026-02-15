@@ -168,7 +168,7 @@ const BorrowPage = () => {
   };
 
   const columns = [
-    { field: "id", headerName: "ID" },
+    { field: "id", headerName: "Sr. No." },
     { field: "book.title", headerName: "Book" },
     { field: "member.name", headerName: "Member" },
     {

@@ -34,7 +34,7 @@ const BooksPage = () => {
   const [notificationType, setNotificationType] = useState("info");
 
   const columns = [
-    { field: "id", headerName: "ID" },
+    { field: "id", headerName: "Sr. No." },
     { field: "title", headerName: "Title" },
     { field: "author", headerName: "Author" },
     { field: "published_year", headerName: "Year" },
