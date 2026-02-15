@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Container,
   Typography,
@@ -20,7 +20,7 @@ import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import BorrowFormModal from "../components/BorrowFormModal";
-import { useDataFetch } from "../hooks/useDataFetch";
+import { usePaginatedDataFetchWithFilters } from "../hooks/usePaginatedDataFetch";
 import { getBorrows, borrowBook, returnBook } from "../api/borrow";
 import { getBooks } from "../api/books";
 import { getMembers } from "../api/members";
@@ -30,14 +30,37 @@ const BorrowPage = () => {
   const [includeReturned, setIncludeReturned] = useState(true);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [selectedBookId, setSelectedBookId] = useState("");
-  
+
   // Data for filter dropdowns
   const [books, setBooks] = useState([]);
   const [members, setMembers] = useState([]);
   const [loadingFilters, setLoadingFilters] = useState(true);
 
-  const { data: borrows, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
-    useDataFetch(() => getBorrows(includeReturned, selectedMemberId || null, selectedBookId || null), [includeReturned, selectedMemberId, selectedBookId]);
+  // Create fetch function that accepts pagination and filters
+  const fetchBorrowsWithFilters = useCallback(
+    (page, limit, filters = {}) => {
+      return getBorrows(page, limit, {
+        returned: filters.includeReturned ?? true,
+        member_id: filters.selectedMemberId || null,
+        book_id: filters.selectedBookId || null,
+      });
+    },
+    []
+  );
+
+  const {
+    data: borrows,
+    totalRecords,
+    page,
+    pageSize,
+    loading,
+    error: fetchError,
+    onPaginationChange,
+    refetch,
+    applyFilters,
+  } = usePaginatedDataFetchWithFilters(fetchBorrowsWithFilters);
+
+  const [openFetchNotification, setOpenFetchNotification] = useState(false);
 
   // Modal and borrow states
   const [openBorrowModal, setOpenBorrowModal] = useState(false);
@@ -57,12 +80,13 @@ const BorrowPage = () => {
     const fetchFilterData = async () => {
       try {
         setLoadingFilters(true);
-        const [booksData, membersData] = await Promise.all([
-          getBooks(),
-          getMembers()
+        const [booksResponse, membersResponse] = await Promise.all([
+          getBooks(1, 100), // Fetch with high limit to get all books
+          getMembers(1, 100) // Fetch with high limit to get all members
         ]);
-        setBooks(booksData);
-        setMembers(membersData);
+        // Extract data from paginated responses
+        setBooks(booksResponse.data || booksResponse);
+        setMembers(membersResponse.data || membersResponse);
       } catch (error) {
         console.error("Error fetching filter data:", error);
       } finally {
@@ -75,16 +99,44 @@ const BorrowPage = () => {
 
   // Handle filter changes
   const handleMemberFilterChange = (event) => {
-    setSelectedMemberId(event.target.value);
+    const newMemberId = event.target.value;
+    setSelectedMemberId(newMemberId);
+    applyFilters({
+      includeReturned,
+      selectedMemberId: newMemberId,
+      selectedBookId,
+    });
   };
 
   const handleBookFilterChange = (event) => {
-    setSelectedBookId(event.target.value);
+    const newBookId = event.target.value;
+    setSelectedBookId(newBookId);
+    applyFilters({
+      includeReturned,
+      selectedMemberId,
+      selectedBookId: newBookId,
+    });
+  };
+
+  const handleIncludeReturnedChange = (event) => {
+    const newIncludeReturned = event.target.checked;
+    setIncludeReturned(newIncludeReturned);
+    applyFilters({
+      includeReturned: newIncludeReturned,
+      selectedMemberId,
+      selectedBookId,
+    });
   };
 
   const clearFilters = () => {
+    setIncludeReturned(true);
     setSelectedMemberId("");
     setSelectedBookId("");
+    applyFilters({
+      includeReturned: true,
+      selectedMemberId: "",
+      selectedBookId: "",
+    });
   };
 
   // Handle borrow submission from modal
@@ -202,7 +254,7 @@ const BorrowPage = () => {
                 control={
                   <Checkbox
                     checked={includeReturned}
-                    onChange={(e) => setIncludeReturned(e.target.checked)}
+                    onChange={handleIncludeReturnedChange}
                   />
                 }
                 label="Returned Books"
@@ -256,7 +308,7 @@ const BorrowPage = () => {
               <Button
                 variant="outlined"
                 onClick={clearFilters}
-                disabled={!selectedMemberId && !selectedBookId}
+                disabled={!selectedMemberId && !selectedBookId && includeReturned}
                 size="small"
               >
                 Clear Filters
@@ -274,6 +326,11 @@ const BorrowPage = () => {
             columns={columns}
             rows={borrows}
             actions={actions}
+            totalRecords={totalRecords}
+            onPaginationChange={onPaginationChange}
+            pageSize={pageSize}
+            isServerPagination={true}
+            currentPage={page}
           />
         </PageStateHandler>
 

@@ -5,14 +5,23 @@ import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import BookFormModal from "../components/BookFormModal";
 import BorrowFormModal from "../components/BorrowFormModal";
-import { useDataFetch } from "../hooks/useDataFetch";
+import { usePaginatedDataFetch } from "../hooks/usePaginatedDataFetch";
 import { getBooks, createBook, updateBook } from "../api/books";
 import { borrowBook } from "../api/borrow";
 
 const BooksPage = () => {
-  const { data: books, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
-    useDataFetch(getBooks);
+  const {
+    data: books,
+    totalRecords,
+    page,
+    pageSize,
+    loading,
+    error: fetchError,
+    onPaginationChange,
+    refetch,
+  } = usePaginatedDataFetch(getBooks);
 
+  const [openFetchNotification, setOpenFetchNotification] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [openBorrowModal, setOpenBorrowModal] = useState(false);
@@ -214,6 +223,11 @@ const BooksPage = () => {
             columns={columns}
             rows={books}
             actions={actions}
+            totalRecords={totalRecords}
+            onPaginationChange={onPaginationChange}
+            pageSize={pageSize}
+            isServerPagination={true}
+            currentPage={page}
           />
         </PageStateHandler>
 

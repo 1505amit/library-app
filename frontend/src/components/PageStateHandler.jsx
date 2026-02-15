@@ -23,7 +23,7 @@ const PageStateHandler = ({
   }
 
   // Empty State
-  if (!loading && data.length === 0) {
+  if (!loading && (!data || data.length === 0)) {
     return (
       <Alert severity="info" sx={{ mt: 2 }}>
         {emptyMessage}
