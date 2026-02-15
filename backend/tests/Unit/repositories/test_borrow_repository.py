@@ -221,7 +221,7 @@ class TestGetAllBorrows:
         mock_borrow = create_mock_borrow_record()
         mock_query = MagicMock()
         mock_query.count.return_value = 1
-        mock_query.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_borrow
         ]
         mock_db.query.return_value = mock_query
@@ -237,7 +237,7 @@ class TestGetAllBorrows:
         borrows = [create_mock_borrow_record(i) for i in range(1, 6)]
         mock_query = MagicMock()
         mock_query.count.return_value = 25
-        mock_query.offset.return_value.limit.return_value.all.return_value = (
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = (
             borrows
         )
         mock_db.query.return_value = mock_query
@@ -252,7 +252,7 @@ class TestGetAllBorrows:
         mock_borrow = create_mock_borrow_record()
         mock_query = MagicMock()
         mock_query.filter.return_value.count.return_value = 1
-        mock_query.filter.return_value.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_borrow
         ]
         mock_db.query.return_value = mock_query
@@ -271,7 +271,7 @@ class TestGetAllBorrows:
         )
         mock_query = MagicMock()
         mock_query.count.return_value = 2
-        mock_query.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             active,
             returned,
         ]
@@ -286,7 +286,7 @@ class TestGetAllBorrows:
         """Test returns empty list with zero total when no records exist."""
         mock_query = MagicMock()
         mock_query.count.return_value = 0
-        mock_query.offset.return_value.limit.return_value.all.return_value = []
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
         mock_db.query.return_value = mock_query
 
         result, total = borrow_repository.get_all_borrows()
@@ -299,7 +299,7 @@ class TestGetAllBorrows:
         mock_borrow = create_mock_borrow_record()
         mock_query = MagicMock()
         mock_query.count.return_value = 50
-        mock_query.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_borrow
         ]
         mock_db.query.return_value = mock_query
@@ -307,8 +307,9 @@ class TestGetAllBorrows:
         result, total = borrow_repository.get_all_borrows(offset=20, limit=10)
 
         # Verify offset and limit parameters are passed correctly
-        mock_query.offset.assert_called_once_with(20)
-        mock_query.offset.return_value.limit.assert_called_once_with(10)
+        mock_query.order_by.return_value.offset.assert_called_once_with(20)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            10)
         assert len(result) == 1
         assert total == 50
 
@@ -317,7 +318,7 @@ class TestGetAllBorrows:
         mock_borrow = create_mock_borrow_record()
         mock_query = MagicMock()
         mock_query.count.return_value = 100
-        mock_query.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_borrow
         ]
         mock_db.query.return_value = mock_query
@@ -325,22 +326,24 @@ class TestGetAllBorrows:
         result, total = borrow_repository.get_all_borrows(offset=0, limit=25)
 
         # Verify offset 0 (first page)
-        mock_query.offset.assert_called_once_with(0)
-        mock_query.offset.return_value.limit.assert_called_once_with(25)
+        mock_query.order_by.return_value.offset.assert_called_once_with(0)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            25)
         assert total == 100
 
     def test_pagination_large_offset(self, borrow_repository, mock_db):
         """Test pagination with large offset."""
         mock_query = MagicMock()
         mock_query.count.return_value = 500
-        mock_query.offset.return_value.limit.return_value.all.return_value = []
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
         mock_db.query.return_value = mock_query
 
         result, total = borrow_repository.get_all_borrows(offset=400, limit=50)
 
         # Verify large offset applied correctly
-        mock_query.offset.assert_called_once_with(400)
-        mock_query.offset.return_value.limit.assert_called_once_with(50)
+        mock_query.order_by.return_value.offset.assert_called_once_with(400)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            50)
         assert total == 500
 
     def test_filter_by_member_id(self, borrow_repository, mock_db):
@@ -348,7 +351,7 @@ class TestGetAllBorrows:
         mock_borrow = create_mock_borrow_record(member_id=123)
         mock_query = MagicMock()
         mock_query.filter.return_value.count.return_value = 1
-        mock_query.filter.return_value.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_borrow
         ]
         mock_db.query.return_value = mock_query
@@ -363,7 +366,7 @@ class TestGetAllBorrows:
         mock_borrow = create_mock_borrow_record(book_id=456)
         mock_query = MagicMock()
         mock_query.filter.return_value.count.return_value = 1
-        mock_query.filter.return_value.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_borrow
         ]
         mock_db.query.return_value = mock_query
@@ -380,7 +383,7 @@ class TestGetAllBorrows:
         )
         mock_query = MagicMock()
         mock_query.filter.return_value.filter.return_value.count.return_value = 1
-        mock_query.filter.return_value.filter.return_value.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.filter.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_borrow
         ]
         mock_db.query.return_value = mock_query

@@ -61,8 +61,9 @@ class BorrowRepository:
 
             # Get total count of filtered results
             total_count = query.count()
-            # Get paginated results
-            borrow_records = query.offset(offset).limit(limit).all()
+            # Get paginated results sorted by borrowed_at in descending order
+            borrow_records = query.order_by(
+                BorrowRecord.borrowed_at.desc()).offset(offset).limit(limit).all()
             logger.info(
                 f"Retrieved {len(borrow_records)} borrow records out of {total_count} total")
             return borrow_records, total_count

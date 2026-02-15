@@ -212,7 +212,7 @@ class TestGetAllBooks:
         mock_book = create_mock_book()
         mock_query = MagicMock()
         mock_query.count.return_value = 1
-        mock_query.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_book]
         mock_db.query.return_value = mock_query
 
@@ -221,15 +221,16 @@ class TestGetAllBooks:
         assert len(result) == 1
         assert total == 1
         assert result[0].id == BOOK_ID
-        mock_query.offset.assert_called_once_with(0)
-        mock_query.offset.return_value.limit.assert_called_once_with(10)
+        mock_query.order_by.return_value.offset.assert_called_once_with(0)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            10)
 
     def test_returns_tuple_with_total_count(self, book_repository, mock_db):
         """Test returns tuple of (books, total_count)."""
         books = [create_mock_book(i) for i in range(1, 6)]
         mock_query = MagicMock()
         mock_query.count.return_value = 25
-        mock_query.offset.return_value.limit.return_value.all.return_value = books
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = books
         mock_db.query.return_value = mock_query
 
         records, total = book_repository.get_all_books(offset=0, limit=5)
@@ -241,7 +242,7 @@ class TestGetAllBooks:
         """Test returns empty list when no books exist."""
         mock_query = MagicMock()
         mock_query.count.return_value = 0
-        mock_query.offset.return_value.limit.return_value.all.return_value = []
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
         mock_db.query.return_value = mock_query
 
         result, total = book_repository.get_all_books()
@@ -254,27 +255,29 @@ class TestGetAllBooks:
         mock_book = create_mock_book()
         mock_query = MagicMock()
         mock_query.count.return_value = 50
-        mock_query.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_book]
         mock_db.query.return_value = mock_query
 
         result, total = book_repository.get_all_books(offset=20, limit=10)
 
-        mock_query.offset.assert_called_once_with(20)
-        mock_query.offset.return_value.limit.assert_called_once_with(10)
+        mock_query.order_by.return_value.offset.assert_called_once_with(20)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            10)
         assert total == 50
 
     def test_pagination_large_offset(self, book_repository, mock_db):
         """Test pagination with large offset."""
         mock_query = MagicMock()
         mock_query.count.return_value = 500
-        mock_query.offset.return_value.limit.return_value.all.return_value = []
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
         mock_db.query.return_value = mock_query
 
         result, total = book_repository.get_all_books(offset=400, limit=50)
 
-        mock_query.offset.assert_called_once_with(400)
-        mock_query.offset.return_value.limit.assert_called_once_with(50)
+        mock_query.order_by.return_value.offset.assert_called_once_with(400)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            50)
         assert total == 500
 
     def test_raises_database_error_on_query_failure(self, book_repository, mock_db):

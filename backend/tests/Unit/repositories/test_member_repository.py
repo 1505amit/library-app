@@ -236,7 +236,7 @@ class TestCreateMember:
         mock_member = create_mock_member()
         mock_query = MagicMock()
         mock_query.count.return_value = 1
-        mock_query.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_member]
         mock_db.query.return_value = mock_query
 
@@ -245,15 +245,16 @@ class TestCreateMember:
         assert len(result) == 1
         assert total == 1
         assert result[0].id == MEMBER_ID
-        mock_query.offset.assert_called_once_with(0)
-        mock_query.offset.return_value.limit.assert_called_once_with(10)
+        mock_query.order_by.return_value.offset.assert_called_once_with(0)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            10)
 
     def test_returns_tuple_with_total_count(self, member_repository, mock_db):
         """Test returns tuple of (members, total_count)."""
         members = [create_mock_member(i) for i in range(1, 6)]
         mock_query = MagicMock()
         mock_query.count.return_value = 25
-        mock_query.offset.return_value.limit.return_value.all.return_value = members
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = members
         mock_db.query.return_value = mock_query
 
         records, total = member_repository.get_all_members(offset=0, limit=5)
@@ -265,7 +266,7 @@ class TestCreateMember:
         """Test returns empty list when no members exist."""
         mock_query = MagicMock()
         mock_query.count.return_value = 0
-        mock_query.offset.return_value.limit.return_value.all.return_value = []
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
         mock_db.query.return_value = mock_query
 
         result, total = member_repository.get_all_members()
@@ -278,27 +279,29 @@ class TestCreateMember:
         mock_member = create_mock_member()
         mock_query = MagicMock()
         mock_query.count.return_value = 50
-        mock_query.offset.return_value.limit.return_value.all.return_value = [
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
             mock_member]
         mock_db.query.return_value = mock_query
 
         result, total = member_repository.get_all_members(offset=20, limit=10)
 
-        mock_query.offset.assert_called_once_with(20)
-        mock_query.offset.return_value.limit.assert_called_once_with(10)
+        mock_query.order_by.return_value.offset.assert_called_once_with(20)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            10)
         assert total == 50
 
     def test_pagination_large_offset(self, member_repository, mock_db):
         """Test pagination with large offset."""
         mock_query = MagicMock()
         mock_query.count.return_value = 500
-        mock_query.offset.return_value.limit.return_value.all.return_value = []
+        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
         mock_db.query.return_value = mock_query
 
         result, total = member_repository.get_all_members(offset=400, limit=50)
 
-        mock_query.offset.assert_called_once_with(400)
-        mock_query.offset.return_value.limit.assert_called_once_with(50)
+        mock_query.order_by.return_value.offset.assert_called_once_with(400)
+        mock_query.order_by.return_value.offset.return_value.limit.assert_called_once_with(
+            50)
         assert total == 500
 
     def test_raises_database_error_on_query_failure(self, member_repository, mock_db):

@@ -42,8 +42,9 @@ class MemberRepository:
                 f"Querying members with offset={offset}, limit={limit}")
             # Get total count
             total_count = self.db.query(Member).count()
-            # Get paginated results
-            members = self.db.query(Member).offset(offset).limit(limit).all()
+            # Get paginated results sorted by created_at in descending order
+            members = self.db.query(Member).order_by(
+                Member.created_at.desc()).offset(offset).limit(limit).all()
             logger.info(
                 f"Retrieved {len(members)} members out of {total_count} total")
             return members, total_count
