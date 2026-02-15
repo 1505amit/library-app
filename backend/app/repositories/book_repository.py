@@ -41,8 +41,9 @@ class BookRepository:
             logger.info(f"Querying books with offset={offset}, limit={limit}")
             # Get total count
             total_count = self.db.query(Book).count()
-            # Get paginated results
-            books = self.db.query(Book).offset(offset).limit(limit).all()
+            # Get paginated results sorted by created_at in descending order
+            books = self.db.query(Book).order_by(
+                Book.created_at.desc()).offset(offset).limit(limit).all()
             logger.info(
                 f"Retrieved {len(books)} books out of {total_count} total")
             return books, total_count
