@@ -45,12 +45,16 @@ const BorrowFormModal = ({
   // Load members and books when modal opens
   useEffect(() => {
     if (open) {
+      // Create AbortController for this effect
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       const loadData = async () => {
         setLoadingOptions(true);
         try {
           const [membersData, booksData] = await Promise.all([
-            getMembers(1, 100), // Fetch with high limit to get all members
-            book ? Promise.resolve(null) : getBooks(1, 100), // Fetch with high limit to get all books
+            getMembers(1, 100, signal), // Fetch with high limit to get all members
+            book ? Promise.resolve(null) : getBooks(1, 100, signal), // Fetch with high limit to get all books
           ]);
           
           // Extract data arrays from paginated responses
@@ -74,6 +78,10 @@ const BorrowFormModal = ({
 
           setLoadError("");
         } catch (error) {
+          // Ignore abort errors
+          if (error.name === "AbortError") {
+            return;
+          }
           console.error("Error loading form data:", error);
           setLoadError("Failed to load form data");
         } finally {
@@ -88,6 +96,11 @@ const BorrowFormModal = ({
       }
       setErrors(INITIAL_ERRORS);
       setTouched({});
+
+      // Cleanup: abort request if modal closes or book changes
+      return () => {
+        controller.abort();
+      };
     }
   }, [open, book]);
 

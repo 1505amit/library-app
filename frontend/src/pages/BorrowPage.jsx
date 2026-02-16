@@ -53,12 +53,12 @@ const BorrowPage = () => {
 
   // Create fetch function that accepts pagination and filters
   const fetchBorrowsWithFilters = useCallback(
-    (page, limit, filters = {}) => {
+    (page, limit, filters = {}, signal) => {
       return getBorrows(page, limit, {
         returned: filters.includeReturned ?? true,
         member_id: filters.selectedMemberId || null,
         book_id: filters.selectedBookId || null,
-      });
+      }, signal);
     },
     []
   );
@@ -77,22 +77,26 @@ const BorrowPage = () => {
 
   
 
-  // Show error notification when fetch fails
+  // Show error notification when fetch fails (filter out AbortError from Strict Mode)
   useEffect(() => {
-    console.log("Fetch error:", fetchError);
-    if (fetchError) {
+    // Only show error notification if there's a real error (not AbortError or empty)
+    if (fetchError && fetchError.trim() && !fetchError.includes("aborted") && !fetchError.includes("canceled")) {
       setOpenFetchNotification(true);
     }
   }, [fetchError]);
 
   // Fetch books and members for filter dropdowns
   useEffect(() => {
+    // Create AbortController for this effect
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     const fetchFilterData = async () => {
       try {
         setLoadingFilters(true);
         const [booksResponse, membersResponse] = await Promise.all([
-          getBooks(1, 100), // Fetch with high limit to get all books
-          getMembers(1, 100) // Fetch with high limit to get all members
+          getBooks(1, 100, signal), // Fetch with high limit to get all books
+          getMembers(1, 100, signal) // Fetch with high limit to get all members
         ]);
         
         // Extract data arrays from paginated responses
@@ -102,6 +106,10 @@ const BorrowPage = () => {
         setBooks(booksList);
         setMembers(membersList);
       } catch (error) {
+        // Ignore abort errors
+        if (error.name === "AbortError") {
+          return;
+        }
         console.error("Error fetching filter data:", error);
       } finally {
         setLoadingFilters(false);
@@ -109,6 +117,11 @@ const BorrowPage = () => {
     };
 
     fetchFilterData();
+
+    // Cleanup: abort request if component unmounts
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   // Handle filter changes
@@ -155,9 +168,12 @@ const BorrowPage = () => {
 
   // Handle borrow submission from modal
   const handleBorrow = async (borrowData) => {
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     try {
       setBorrowLoading(true);
-      await borrowBook(borrowData);
+      await borrowBook(borrowData, signal);
 
       // Success
       setSuccessMessage("Borrow record created successfully!");
@@ -167,6 +183,10 @@ const BorrowPage = () => {
       // Reload borrow records
       await refetch();
     } catch (error) {
+      // Ignore abort errors
+      if (error.name === "AbortError") {
+        return;
+      }
       const errorMsg =
         error.response?.data?.detail || "Failed to create borrow record. Please try again.";
       setBorrowError(errorMsg);
@@ -201,9 +221,12 @@ const BorrowPage = () => {
   const handleConfirmReturn = async () => {
     if (!selectedBorrow) return;
 
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     try {
       setReturnLoading(true);
-      await returnBook(selectedBorrow.id);
+      await returnBook(selectedBorrow.id, signal);
 
       // Success
       setSuccessMessage(
@@ -216,6 +239,10 @@ const BorrowPage = () => {
       // Reload borrow records
       await refetch();
     } catch (error) {
+      // Ignore abort errors
+      if (error.name === "AbortError") {
+        return;
+      }
       const errorMsg =
         error.response?.data?.detail ||
         "Failed to return book. Please try again.";

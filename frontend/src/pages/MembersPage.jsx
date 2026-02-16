@@ -28,9 +28,10 @@ const MembersPage = () => {
   const [openNotification, setOpenNotification] = useState(false);
   const [notificationType, setNotificationType] = useState("info");
 
-  // Show error notification when fetch fails
+  // Show error notification when fetch fails (filter out AbortError from Strict Mode)
   useEffect(() => {
-    if (fetchError) {
+    // Only show error notification if there's a real error (not AbortError or empty)
+    if (fetchError && fetchError.trim() && !fetchError.includes("aborted") && !fetchError.includes("canceled")) {
       setOpenFetchNotification(true);
     }
   }, [fetchError]);
@@ -79,9 +80,12 @@ const MembersPage = () => {
   // Handle form submission for adding member
   const handleAddMember = useCallback(
     async (formData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsSubmitting(true);
       try {
-        await createMember(formData);
+        await createMember(formData, signal);
         
         // Close modal
         handleCloseAddModal();
@@ -94,6 +98,10 @@ const MembersPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error adding member:", err);
         const errorMessage = 
           err.response?.data?.detail || "Failed to add member. Please try again.";
@@ -110,9 +118,12 @@ const MembersPage = () => {
   // Handle form submission for updating member
   const handleUpdateMember = useCallback(
     async (formData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsSubmitting(true);
       try {
-        await updateMember(selectedMember.id, formData);
+        await updateMember(selectedMember.id, formData, signal);
         
         // Close modal
         handleCloseEditModal();
@@ -125,6 +136,10 @@ const MembersPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error updating member:", err);
         const errorMessage = 
           err.response?.data?.detail || "Failed to update member. Please try again.";

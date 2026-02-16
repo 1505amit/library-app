@@ -1,10 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { extractResponseData } from "../utils/apiResponseHandler";
 import { PAGINATION } from "../config/constants";
 
 /**
+ * Helper to check if error is due to request cancellation
+ */
+const isCancellationError = (err) => {
+  return (
+    err.name === "AbortError" || 
+    err.message === "canceled" ||
+    err.code === "ECONNABORTED"
+  );
+};
+
+/**
  * Custom hook for handling paginated data fetching
- * @param {Function} fetchFunction - API function to call for fetching data
+ * @param {Function} fetchFunction - API function to call for fetching data (receives page, limit, signal)
  * @param {number} initialPage - Starting page (default: 1)
  * @param {number} initialLimit - Items per page (default: PAGINATION.DEFAULT_LIMIT)
  * @returns {Object} - Data, pagination info, loading state, error, and handlers
@@ -20,14 +31,13 @@ export const usePaginatedDataFetch = (
   const [totalRecords, setTotalRecords] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const controllerRef = useRef(null);
 
-  // Fetch data from API
-  const fetchData = useCallback(
-    async (currentPage = page, currentPageSize = pageSize) => {
-      setLoading(true);
-      setError(null);
+  // Fetch data from API with AbortController support
+  const performFetch = useCallback(
+    async (currentPage, currentPageSize, signal) => {
       try {
-        const response = await fetchFunction(currentPage, currentPageSize);
+        const response = await fetchFunction(currentPage, currentPageSize, signal);
         const { data, pagination } = extractResponseData(response);
 
         // Extract the actual items array and total count
@@ -37,6 +47,10 @@ export const usePaginatedDataFetch = (
         setData(items);
         setTotalRecords(total);
       } catch (err) {
+        // Ignore errors from aborted/cancelled requests
+        if (isCancellationError(err)) {
+          return;
+        }
         console.error("Error fetching paginated data:", err);
         // Extract error message from Axios error response or fallback to error message
         const errorMessage = err.response?.data?.detail || err.message || "Failed to fetch data";
@@ -52,8 +66,24 @@ export const usePaginatedDataFetch = (
 
   // Initial data fetch and refetch on pagination changes
   useEffect(() => {
-    fetchData(page, pageSize);
-  }, [page, pageSize, fetchData]);
+    // Cancel previous request if it exists
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+    }
+
+    // Create new AbortController for this fetch
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    setLoading(true);
+    setError(null);
+    performFetch(page, pageSize, controller.signal);
+
+    // Cleanup: abort request if component unmounts or dependencies change
+    return () => {
+      controller.abort();
+    };
+  }, [page, pageSize, performFetch]);
 
   // Handle pagination change from DataTable
   const onPaginationChange = useCallback((newPage, newPageSize) => {
@@ -63,8 +93,17 @@ export const usePaginatedDataFetch = (
 
   // Refetch data with current pagination
   const refetch = useCallback(() => {
-    return fetchData(page, pageSize);
-  }, [fetchData, page, pageSize]);
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    setLoading(true);
+    setError(null);
+    return performFetch(page, pageSize, controller.signal);
+  }, [page, pageSize, performFetch]);
 
   // Reset pagination to initial state
   const resetPagination = useCallback(() => {
@@ -87,7 +126,7 @@ export const usePaginatedDataFetch = (
 
 /**
  * Custom hook for handling paginated data fetching with filters
- * @param {Function} fetchFunction - API function to call for fetching data (receives page, limit, filters)
+ * @param {Function} fetchFunction - API function to call for fetching data (receives page, limit, filters, signal)
  * @param {number} initialPage - Starting page (default: 1)
  * @param {number} initialLimit - Items per page (default: PAGINATION.DEFAULT_LIMIT)
  * @returns {Object} - Data, pagination info, loading state, error, handlers, and filter functions
@@ -101,8 +140,8 @@ export const usePaginatedDataFetchWithFilters = (
 
   // Create a wrapper function that includes filters
   const fetchFunctionWithFilters = useCallback(
-    (currentPage, currentPageSize) => {
-      return fetchFunction(currentPage, currentPageSize, filters);
+    (currentPage, currentPageSize, signal) => {
+      return fetchFunction(currentPage, currentPageSize, filters, signal);
     },
     [fetchFunction, filters]
   );
@@ -125,7 +164,6 @@ export const usePaginatedDataFetchWithFilters = (
     baseHook.resetPagination();
   }, [baseHook]);
 
-  console.log({...baseHook, filters});
   return {
     ...baseHook,
     filters,

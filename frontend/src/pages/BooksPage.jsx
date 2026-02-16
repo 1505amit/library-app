@@ -33,9 +33,10 @@ const BooksPage = () => {
   const [openNotification, setOpenNotification] = useState(false);
   const [notificationType, setNotificationType] = useState("info");
 
-  // Show error notification when fetch fails
+  // Show error notification when fetch fails (filter out AbortError from Strict Mode)
   useEffect(() => {
-    if (fetchError) {
+    // Only show error notification if there's a real error (not AbortError or empty)
+    if (fetchError && fetchError.trim() && !fetchError.includes("aborted") && !fetchError.includes("canceled")) {
       setOpenFetchNotification(true);
     }
   }, [fetchError]);
@@ -84,9 +85,12 @@ const BooksPage = () => {
   // Handle form submission for adding book
   const handleAddBook = useCallback(
     async (formData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsSubmitting(true);
       try {
-        await createBook(formData);
+        await createBook(formData, signal);
 
         // Close modal
         handleCloseAddModal();
@@ -99,6 +103,10 @@ const BooksPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error adding book:", err);
         const errorMessage =
           err.response?.data?.detail || "Failed to add book. Please try again.";
@@ -115,9 +123,12 @@ const BooksPage = () => {
   // Handle form submission for updating book
   const handleUpdateBook = useCallback(
     async (formData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsSubmitting(true);
       try {
-        await updateBook(selectedBook.id, formData);
+        await updateBook(selectedBook.id, formData, signal);
 
         // Close modal
         handleCloseEditModal();
@@ -130,6 +141,10 @@ const BooksPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error updating book:", err);
         const errorMessage =
           err.response?.data?.detail || "Failed to update book. Please try again.";
@@ -158,9 +173,12 @@ const BooksPage = () => {
   // Handle borrow submission
   const handleBorrowSubmit = useCallback(
     async (borrowData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsBorrowSubmitting(true);
       try {
-        await borrowBook(borrowData);
+        await borrowBook(borrowData, signal);
 
         // Close modal
         handleCloseBorrowModal();
@@ -173,6 +191,10 @@ const BooksPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error borrowing book:", err);
         const errorMessage =
           err.response?.data?.detail || "Failed to borrow book. Please try again.";
