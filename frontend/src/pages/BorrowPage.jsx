@@ -125,7 +125,7 @@ const BorrowPage = () => {
   }, []);
 
   // Handle filter changes
-  const handleMemberFilterChange = (event) => {
+  const handleMemberFilterChange = useCallback((event) => {
     const newMemberId = event.target.value;
     setSelectedMemberId(newMemberId);
     applyFilters({
@@ -133,9 +133,9 @@ const BorrowPage = () => {
       selectedMemberId: newMemberId,
       selectedBookId,
     });
-  };
+  }, [applyFilters, includeReturned, selectedBookId]);
 
-  const handleBookFilterChange = (event) => {
+  const handleBookFilterChange = useCallback((event) => {
     const newBookId = event.target.value;
     setSelectedBookId(newBookId);
     applyFilters({
@@ -143,9 +143,9 @@ const BorrowPage = () => {
       selectedMemberId,
       selectedBookId: newBookId,
     });
-  };
+  }, [applyFilters, includeReturned, selectedMemberId]);
 
-  const handleIncludeReturnedChange = (event) => {
+  const handleIncludeReturnedChange = useCallback((event) => {
     const newIncludeReturned = event.target.checked;
     setIncludeReturned(newIncludeReturned);
     applyFilters({
@@ -153,9 +153,9 @@ const BorrowPage = () => {
       selectedMemberId,
       selectedBookId,
     });
-  };
+  }, [applyFilters, selectedMemberId, selectedBookId]);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setIncludeReturned(true);
     setSelectedMemberId("");
     setSelectedBookId("");
@@ -164,10 +164,10 @@ const BorrowPage = () => {
       selectedMemberId: "",
       selectedBookId: "",
     });
-  };
+  }, [applyFilters]);
 
   // Handle borrow submission from modal
-  const handleBorrow = async (borrowData) => {
+  const handleBorrow = useCallback(async (borrowData) => {
     const controller = new AbortController();
     const signal = controller.signal;
 
@@ -195,7 +195,7 @@ const BorrowPage = () => {
     } finally {
       setBorrowLoading(false);
     }
-  };
+  }, [refetch]);
 
   const columns = [
     { field: "id", headerName: "Sr. No." },
@@ -213,12 +213,12 @@ const BorrowPage = () => {
     },
   ];
 
-  const handleReturn = (borrow) => {
+  const handleReturn = useCallback((borrow) => {
     setSelectedBorrow(borrow);
     setConfirmDialogOpen(true);
-  };
+  }, []);
 
-  const handleConfirmReturn = async () => {
+  const handleConfirmReturn = useCallback(async () => {
     if (!selectedBorrow) return;
 
     const controller = new AbortController();
@@ -252,12 +252,12 @@ const BorrowPage = () => {
     } finally {
       setReturnLoading(false);
     }
-  };
+  }, [selectedBorrow, refetch]);
 
-  const handleCancelReturn = () => {
+  const handleCancelReturn = useCallback(() => {
     setConfirmDialogOpen(false);
     setSelectedBorrow(null);
-  };
+  }, []);
 
   const actions = [
     {

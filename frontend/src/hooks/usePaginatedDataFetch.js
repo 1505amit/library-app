@@ -159,10 +159,11 @@ export const usePaginatedDataFetchWithFilters = (
   }, []);
 
   // Apply filters and reset to first page
+  // Only depend on resetPagination, not the entire baseHook object
   const applyFilters = useCallback((newFilters) => {
     setFilters(newFilters);
     baseHook.resetPagination();
-  }, [baseHook]);
+  }, [baseHook.resetPagination]);
 
   return {
     ...baseHook,
