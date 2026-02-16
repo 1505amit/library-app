@@ -38,7 +38,9 @@ export const usePaginatedDataFetch = (
         setTotalRecords(total);
       } catch (err) {
         console.error("Error fetching paginated data:", err);
-        setError(err.message || "Failed to fetch data");
+        // Extract error message from Axios error response or fallback to error message
+        const errorMessage = err.response?.data?.detail || err.message || "Failed to fetch data";
+        setError(errorMessage);
         setData([]);
         setTotalRecords(0);
       } finally {
@@ -123,6 +125,7 @@ export const usePaginatedDataFetchWithFilters = (
     baseHook.resetPagination();
   }, [baseHook]);
 
+  console.log({...baseHook, filters});
   return {
     ...baseHook,
     filters,

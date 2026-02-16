@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Container, Typography, Box, Chip, Button } from "@mui/material";
 import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
@@ -27,6 +27,13 @@ const MembersPage = () => {
   const [notificationMessage, setNotificationMessage] = useState("");
   const [openNotification, setOpenNotification] = useState(false);
   const [notificationType, setNotificationType] = useState("info");
+
+  // Show error notification when fetch fails
+  useEffect(() => {
+    if (fetchError) {
+      setOpenFetchNotification(true);
+    }
+  }, [fetchError]);
 
   const columns = [
     { field: "id", headerName: "Sr. No." },

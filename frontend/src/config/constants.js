@@ -7,7 +7,7 @@
 // Uses environment variables via Vite for different environments
 export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1",
-  TIMEOUT: 30000,
+  TIMEOUT: 30000, // 30 seconds timeout for API requests
   HEADERS: {
     "Content-Type": "application/json",
   },
@@ -68,16 +68,4 @@ export const PAGINATION_META = {
     limit: "limit",
     pages: "pages",
   },
-};
-
-// Error Messages - Centralized error strings for consistency
-export const ERROR_MESSAGES = {
-  FETCH_FAILED: "Failed to fetch data. Please try again.",
-  CREATE_FAILED: "Failed to create record. Please try again.",
-  UPDATE_FAILED: "Failed to update record. Please try again.",
-  DELETE_FAILED: "Failed to delete record. Please try again.",
-  NETWORK_ERROR: "Network error. Please check your connection.",
-  UNAUTHORIZED: "Unauthorized. Please log in again.",
-  NOT_FOUND: "Resource not found.",
-  SERVER_ERROR: "Server error. Please try again later.",
 };

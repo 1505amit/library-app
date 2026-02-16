@@ -31,10 +31,25 @@ const BorrowPage = () => {
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [selectedBookId, setSelectedBookId] = useState("");
 
+  // Modal and borrow states
+  const [openBorrowModal, setOpenBorrowModal] = useState(false);
+  const [borrowLoading, setBorrowLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [openSuccessSnackbar, setOpenSuccessSnackbar] = useState(false);
+  const [borrowError, setBorrowError] = useState("");
+  const [openErrorSnackbar, setOpenErrorSnackbar] = useState(false);
+
+  // Return confirmation states
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [selectedBorrow, setSelectedBorrow] = useState(null);
+  const [returnLoading, setReturnLoading] = useState(false);
+
   // Data for filter dropdowns
   const [books, setBooks] = useState([]);
   const [members, setMembers] = useState([]);
   const [loadingFilters, setLoadingFilters] = useState(true);
+
+  const [openFetchNotification, setOpenFetchNotification] = useState(false);
 
   // Create fetch function that accepts pagination and filters
   const fetchBorrowsWithFilters = useCallback(
@@ -60,20 +75,15 @@ const BorrowPage = () => {
     applyFilters,
   } = usePaginatedDataFetchWithFilters(fetchBorrowsWithFilters);
 
-  const [openFetchNotification, setOpenFetchNotification] = useState(false);
+  
 
-  // Modal and borrow states
-  const [openBorrowModal, setOpenBorrowModal] = useState(false);
-  const [borrowLoading, setBorrowLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [openSuccessSnackbar, setOpenSuccessSnackbar] = useState(false);
-  const [borrowError, setBorrowError] = useState("");
-  const [openErrorSnackbar, setOpenErrorSnackbar] = useState(false);
-
-  // Return confirmation states
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [selectedBorrow, setSelectedBorrow] = useState(null);
-  const [returnLoading, setReturnLoading] = useState(false);
+  // Show error notification when fetch fails
+  useEffect(() => {
+    console.log("Fetch error:", fetchError);
+    if (fetchError) {
+      setOpenFetchNotification(true);
+    }
+  }, [fetchError]);
 
   // Fetch books and members for filter dropdowns
   useEffect(() => {
