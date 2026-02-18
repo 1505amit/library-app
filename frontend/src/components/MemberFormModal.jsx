@@ -85,6 +85,11 @@ const MemberFormModal = ({
         setErrors(INITIAL_ERRORS);
         setTouched({});
       }
+    } else {
+      // Cleanup when modal closes - prevent holding stale data in memory
+      setFormData(INITIAL_FORM_STATE);
+      setErrors(INITIAL_ERRORS);
+      setTouched({});
     }
   }, [open, editData]);
 

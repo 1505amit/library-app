@@ -101,6 +101,15 @@ const BorrowFormModal = ({
       return () => {
         controller.abort();
       };
+    } else {
+      // Cleanup when modal closes - prevent holding stale data in memory
+      setFormData(INITIAL_FORM_STATE);
+      setErrors(INITIAL_ERRORS);
+      setTouched({});
+      setMembers([]);
+      setBooks([]);
+      setLoadError("");
+      setLoadingOptions(false);
     }
   }, [open, book]);
 
@@ -184,8 +193,20 @@ const BorrowFormModal = ({
     }
   }, [formData, validateField, onSubmit, book]);
 
+  // Handle modal close - cleanup state
+  const handleClose = useCallback(() => {
+    // Reset form state to prevent memory leaks and clear errors
+    setFormData(INITIAL_FORM_STATE);
+    setErrors(INITIAL_ERRORS);
+    setTouched({});
+    setLoadError("");
+    setMembers([]);
+    setBooks([]);
+    onClose();
+  }, [onClose]);
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>Create Borrow Record</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -280,7 +301,7 @@ const BorrowFormModal = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={isLoading || loadingOptions}>
+        <Button onClick={handleClose} disabled={isLoading || loadingOptions}>
           Cancel
         </Button>
         <Button
