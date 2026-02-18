@@ -1,16 +1,25 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Container, Typography, Box, Chip, Button } from "@mui/material";
 import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import MemberFormModal from "../components/MemberFormModal";
-import { useDataFetch } from "../hooks/useDataFetch";
+import { usePaginatedDataFetch } from "../hooks/usePaginatedDataFetch";
 import { getMembers, createMember, updateMember } from "../api/members";
 
 const MembersPage = () => {
-  const { data: members, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
-    useDataFetch(getMembers);
-  
+  const {
+    data: members,
+    totalRecords,
+    page,
+    pageSize,
+    loading,
+    error: fetchError,
+    onPaginationChange,
+    refetch,
+  } = usePaginatedDataFetch(getMembers);
+
+  const [openFetchNotification, setOpenFetchNotification] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -19,8 +28,16 @@ const MembersPage = () => {
   const [openNotification, setOpenNotification] = useState(false);
   const [notificationType, setNotificationType] = useState("info");
 
+  // Show error notification when fetch fails (filter out AbortError from Strict Mode)
+  useEffect(() => {
+    // Only show error notification if there's a real error (not AbortError or empty)
+    if (fetchError && fetchError.trim() && !fetchError.includes("aborted") && !fetchError.includes("canceled")) {
+      setOpenFetchNotification(true);
+    }
+  }, [fetchError]);
+
   const columns = [
-    { field: "id", headerName: "ID" },
+    { field: "id", headerName: "Sr. No." },
     { field: "name", headerName: "Name" },
     { field: "email", headerName: "Email" },
     { field: "phone", headerName: "Phone" },
@@ -63,9 +80,12 @@ const MembersPage = () => {
   // Handle form submission for adding member
   const handleAddMember = useCallback(
     async (formData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsSubmitting(true);
       try {
-        await createMember(formData);
+        await createMember(formData, signal);
         
         // Close modal
         handleCloseAddModal();
@@ -78,6 +98,10 @@ const MembersPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error adding member:", err);
         const errorMessage = 
           err.response?.data?.detail || "Failed to add member. Please try again.";
@@ -94,9 +118,12 @@ const MembersPage = () => {
   // Handle form submission for updating member
   const handleUpdateMember = useCallback(
     async (formData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsSubmitting(true);
       try {
-        await updateMember(selectedMember.id, formData);
+        await updateMember(selectedMember.id, formData, signal);
         
         // Close modal
         handleCloseEditModal();
@@ -109,6 +136,10 @@ const MembersPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error updating member:", err);
         const errorMessage = 
           err.response?.data?.detail || "Failed to update member. Please try again.";
@@ -160,6 +191,11 @@ const MembersPage = () => {
             columns={columns}
             rows={members}
             actions={actions}
+            totalRecords={totalRecords}
+            onPaginationChange={onPaginationChange}
+            pageSize={pageSize}
+            isServerPagination={true}
+            currentPage={page}
           />
         </PageStateHandler>
 

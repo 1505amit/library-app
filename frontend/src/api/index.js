@@ -1,10 +1,10 @@
 import axios from "axios";
+import { API_CONFIG } from "../config/constants.js";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000/api/v1", // backend FastAPI URL
-  headers: {
-    "Content-Type": "application/json",
-  },
+  baseURL: API_CONFIG.BASE_URL,
+  headers: API_CONFIG.HEADERS,
+  timeout: API_CONFIG.TIMEOUT,
 });
 
 export default api;

@@ -45,20 +45,29 @@ const BorrowFormModal = ({
   // Load members and books when modal opens
   useEffect(() => {
     if (open) {
+      // Create AbortController for this effect
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       const loadData = async () => {
         setLoadingOptions(true);
         try {
           const [membersData, booksData] = await Promise.all([
-            getMembers(),
-            book ? Promise.resolve(null) : getBooks(),
+            getMembers(1, 100, signal), // Fetch with high limit to get all members
+            book ? Promise.resolve(null) : getBooks(1, 100, signal), // Fetch with high limit to get all books
           ]);
+          
+          // Extract data arrays from paginated responses
+          const membersList = membersData.data || membersData || [];
+          const booksList = booksData?.data || booksData || [];
+          
           // Filter active members and available books
-          const activeMembers = membersData.filter((m) => m.active);
+          const activeMembers = membersList.filter((m) => m.active);
           setMembers(activeMembers);
 
           // Only set available books if not in single-book mode
-          if (!book && booksData) {
-            const availableBooks = booksData.filter((b) => b.available);
+          if (!book && booksList.length > 0) {
+            const availableBooks = booksList.filter((b) => b.available);
             setBooks(availableBooks);
           }
 
@@ -69,6 +78,10 @@ const BorrowFormModal = ({
 
           setLoadError("");
         } catch (error) {
+          // Ignore abort errors
+          if (error.name === "AbortError") {
+            return;
+          }
           console.error("Error loading form data:", error);
           setLoadError("Failed to load form data");
         } finally {
@@ -83,6 +96,20 @@ const BorrowFormModal = ({
       }
       setErrors(INITIAL_ERRORS);
       setTouched({});
+
+      // Cleanup: abort request if modal closes or book changes
+      return () => {
+        controller.abort();
+      };
+    } else {
+      // Cleanup when modal closes - prevent holding stale data in memory
+      setFormData(INITIAL_FORM_STATE);
+      setErrors(INITIAL_ERRORS);
+      setTouched({});
+      setMembers([]);
+      setBooks([]);
+      setLoadError("");
+      setLoadingOptions(false);
     }
   }, [open, book]);
 
@@ -166,8 +193,20 @@ const BorrowFormModal = ({
     }
   }, [formData, validateField, onSubmit, book]);
 
+  // Handle modal close - cleanup state
+  const handleClose = useCallback(() => {
+    // Reset form state to prevent memory leaks and clear errors
+    setFormData(INITIAL_FORM_STATE);
+    setErrors(INITIAL_ERRORS);
+    setTouched({});
+    setLoadError("");
+    setMembers([]);
+    setBooks([]);
+    onClose();
+  }, [onClose]);
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>Create Borrow Record</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -262,7 +301,7 @@ const BorrowFormModal = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={isLoading || loadingOptions}>
+        <Button onClick={handleClose} disabled={isLoading || loadingOptions}>
           Cancel
         </Button>
         <Button

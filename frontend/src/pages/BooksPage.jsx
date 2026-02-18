@@ -1,18 +1,27 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Container, Typography, Box, Chip, Button } from "@mui/material";
 import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import BookFormModal from "../components/BookFormModal";
 import BorrowFormModal from "../components/BorrowFormModal";
-import { useDataFetch } from "../hooks/useDataFetch";
+import { usePaginatedDataFetch } from "../hooks/usePaginatedDataFetch";
 import { getBooks, createBook, updateBook } from "../api/books";
 import { borrowBook } from "../api/borrow";
 
 const BooksPage = () => {
-  const { data: books, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
-    useDataFetch(getBooks);
+  const {
+    data: books,
+    totalRecords,
+    page,
+    pageSize,
+    loading,
+    error: fetchError,
+    onPaginationChange,
+    refetch,
+  } = usePaginatedDataFetch(getBooks);
 
+  const [openFetchNotification, setOpenFetchNotification] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [openBorrowModal, setOpenBorrowModal] = useState(false);
@@ -24,8 +33,16 @@ const BooksPage = () => {
   const [openNotification, setOpenNotification] = useState(false);
   const [notificationType, setNotificationType] = useState("info");
 
+  // Show error notification when fetch fails (filter out AbortError from Strict Mode)
+  useEffect(() => {
+    // Only show error notification if there's a real error (not AbortError or empty)
+    if (fetchError && fetchError.trim() && !fetchError.includes("aborted") && !fetchError.includes("canceled")) {
+      setOpenFetchNotification(true);
+    }
+  }, [fetchError]);
+
   const columns = [
-    { field: "id", headerName: "ID" },
+    { field: "id", headerName: "Sr. No." },
     { field: "title", headerName: "Title" },
     { field: "author", headerName: "Author" },
     { field: "published_year", headerName: "Year" },
@@ -68,9 +85,12 @@ const BooksPage = () => {
   // Handle form submission for adding book
   const handleAddBook = useCallback(
     async (formData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsSubmitting(true);
       try {
-        await createBook(formData);
+        await createBook(formData, signal);
 
         // Close modal
         handleCloseAddModal();
@@ -83,6 +103,10 @@ const BooksPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error adding book:", err);
         const errorMessage =
           err.response?.data?.detail || "Failed to add book. Please try again.";
@@ -99,9 +123,12 @@ const BooksPage = () => {
   // Handle form submission for updating book
   const handleUpdateBook = useCallback(
     async (formData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsSubmitting(true);
       try {
-        await updateBook(selectedBook.id, formData);
+        await updateBook(selectedBook.id, formData, signal);
 
         // Close modal
         handleCloseEditModal();
@@ -114,6 +141,10 @@ const BooksPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error updating book:", err);
         const errorMessage =
           err.response?.data?.detail || "Failed to update book. Please try again.";
@@ -142,9 +173,12 @@ const BooksPage = () => {
   // Handle borrow submission
   const handleBorrowSubmit = useCallback(
     async (borrowData) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+
       setIsBorrowSubmitting(true);
       try {
-        await borrowBook(borrowData);
+        await borrowBook(borrowData, signal);
 
         // Close modal
         handleCloseBorrowModal();
@@ -157,6 +191,10 @@ const BooksPage = () => {
         setNotificationType("success");
         setOpenNotification(true);
       } catch (err) {
+        // Ignore abort errors
+        if (err.name === "AbortError") {
+          return;
+        }
         console.error("Error borrowing book:", err);
         const errorMessage =
           err.response?.data?.detail || "Failed to borrow book. Please try again.";
@@ -214,6 +252,11 @@ const BooksPage = () => {
             columns={columns}
             rows={books}
             actions={actions}
+            totalRecords={totalRecords}
+            onPaginationChange={onPaginationChange}
+            pageSize={pageSize}
+            isServerPagination={true}
+            currentPage={page}
           />
         </PageStateHandler>
 

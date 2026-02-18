@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Container,
   Typography,
@@ -20,7 +20,7 @@ import DataTable from "../components/DataTable";
 import PageStateHandler from "../components/PageStateHandler";
 import Notification from "../components/Notification";
 import BorrowFormModal from "../components/BorrowFormModal";
-import { useDataFetch } from "../hooks/useDataFetch";
+import { usePaginatedDataFetchWithFilters } from "../hooks/usePaginatedDataFetch";
 import { getBorrows, borrowBook, returnBook } from "../api/borrow";
 import { getBooks } from "../api/books";
 import { getMembers } from "../api/members";
@@ -30,14 +30,6 @@ const BorrowPage = () => {
   const [includeReturned, setIncludeReturned] = useState(true);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [selectedBookId, setSelectedBookId] = useState("");
-  
-  // Data for filter dropdowns
-  const [books, setBooks] = useState([]);
-  const [members, setMembers] = useState([]);
-  const [loadingFilters, setLoadingFilters] = useState(true);
-
-  const { data: borrows, loading, error: fetchError, openSnackbar: openFetchNotification, setOpenSnackbar: setOpenFetchNotification, refetch } =
-    useDataFetch(() => getBorrows(includeReturned, selectedMemberId || null, selectedBookId || null), [includeReturned, selectedMemberId, selectedBookId]);
 
   // Modal and borrow states
   const [openBorrowModal, setOpenBorrowModal] = useState(false);
@@ -52,18 +44,72 @@ const BorrowPage = () => {
   const [selectedBorrow, setSelectedBorrow] = useState(null);
   const [returnLoading, setReturnLoading] = useState(false);
 
+  // Data for filter dropdowns
+  const [books, setBooks] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [loadingFilters, setLoadingFilters] = useState(true);
+
+  const [openFetchNotification, setOpenFetchNotification] = useState(false);
+
+  // Create fetch function that accepts pagination and filters
+  const fetchBorrowsWithFilters = useCallback(
+    (page, limit, filters = {}, signal) => {
+      return getBorrows(page, limit, {
+        returned: filters.includeReturned ?? true,
+        member_id: filters.selectedMemberId || null,
+        book_id: filters.selectedBookId || null,
+      }, signal);
+    },
+    []
+  );
+
+  const {
+    data: borrows,
+    totalRecords,
+    page,
+    pageSize,
+    loading,
+    error: fetchError,
+    onPaginationChange,
+    refetch,
+    applyFilters,
+  } = usePaginatedDataFetchWithFilters(fetchBorrowsWithFilters);
+
+  
+
+  // Show error notification when fetch fails (filter out AbortError from Strict Mode)
+  useEffect(() => {
+    // Only show error notification if there's a real error (not AbortError or empty)
+    if (fetchError && fetchError.trim() && !fetchError.includes("aborted") && !fetchError.includes("canceled")) {
+      setOpenFetchNotification(true);
+    }
+  }, [fetchError]);
+
   // Fetch books and members for filter dropdowns
   useEffect(() => {
+    // Create AbortController for this effect
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     const fetchFilterData = async () => {
       try {
         setLoadingFilters(true);
-        const [booksData, membersData] = await Promise.all([
-          getBooks(),
-          getMembers()
+        const [booksResponse, membersResponse] = await Promise.all([
+          getBooks(1, 100, signal), // Fetch with high limit to get all books
+          getMembers(1, 100, signal) // Fetch with high limit to get all members
         ]);
-        setBooks(booksData);
-        setMembers(membersData);
+        
+        // Extract data arrays from paginated responses
+        const booksList = booksResponse.data || booksResponse || [];
+        const membersList = membersResponse.data || membersResponse || [];
+        
+        setBooks(booksList);
+        setMembers(membersList);
       } catch (error) {
+        // Ignore abort errors
+        if (error.name === "AbortError") {
+          return;
+        }
         console.error("Error fetching filter data:", error);
       } finally {
         setLoadingFilters(false);
@@ -71,27 +117,63 @@ const BorrowPage = () => {
     };
 
     fetchFilterData();
+
+    // Cleanup: abort request if component unmounts
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   // Handle filter changes
-  const handleMemberFilterChange = (event) => {
-    setSelectedMemberId(event.target.value);
-  };
+  const handleMemberFilterChange = useCallback((event) => {
+    const newMemberId = event.target.value;
+    setSelectedMemberId(newMemberId);
+    applyFilters({
+      includeReturned,
+      selectedMemberId: newMemberId,
+      selectedBookId,
+    });
+  }, [applyFilters, includeReturned, selectedBookId]);
 
-  const handleBookFilterChange = (event) => {
-    setSelectedBookId(event.target.value);
-  };
+  const handleBookFilterChange = useCallback((event) => {
+    const newBookId = event.target.value;
+    setSelectedBookId(newBookId);
+    applyFilters({
+      includeReturned,
+      selectedMemberId,
+      selectedBookId: newBookId,
+    });
+  }, [applyFilters, includeReturned, selectedMemberId]);
 
-  const clearFilters = () => {
+  const handleIncludeReturnedChange = useCallback((event) => {
+    const newIncludeReturned = event.target.checked;
+    setIncludeReturned(newIncludeReturned);
+    applyFilters({
+      includeReturned: newIncludeReturned,
+      selectedMemberId,
+      selectedBookId,
+    });
+  }, [applyFilters, selectedMemberId, selectedBookId]);
+
+  const clearFilters = useCallback(() => {
+    setIncludeReturned(true);
     setSelectedMemberId("");
     setSelectedBookId("");
-  };
+    applyFilters({
+      includeReturned: true,
+      selectedMemberId: "",
+      selectedBookId: "",
+    });
+  }, [applyFilters]);
 
   // Handle borrow submission from modal
-  const handleBorrow = async (borrowData) => {
+  const handleBorrow = useCallback(async (borrowData) => {
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     try {
       setBorrowLoading(true);
-      await borrowBook(borrowData);
+      await borrowBook(borrowData, signal);
 
       // Success
       setSuccessMessage("Borrow record created successfully!");
@@ -101,6 +183,10 @@ const BorrowPage = () => {
       // Reload borrow records
       await refetch();
     } catch (error) {
+      // Ignore abort errors
+      if (error.name === "AbortError") {
+        return;
+      }
       const errorMsg =
         error.response?.data?.detail || "Failed to create borrow record. Please try again.";
       setBorrowError(errorMsg);
@@ -109,10 +195,10 @@ const BorrowPage = () => {
     } finally {
       setBorrowLoading(false);
     }
-  };
+  }, [refetch]);
 
   const columns = [
-    { field: "id", headerName: "ID" },
+    { field: "id", headerName: "Sr. No." },
     { field: "book.title", headerName: "Book" },
     { field: "member.name", headerName: "Member" },
     {
@@ -127,17 +213,20 @@ const BorrowPage = () => {
     },
   ];
 
-  const handleReturn = (borrow) => {
+  const handleReturn = useCallback((borrow) => {
     setSelectedBorrow(borrow);
     setConfirmDialogOpen(true);
-  };
+  }, []);
 
-  const handleConfirmReturn = async () => {
+  const handleConfirmReturn = useCallback(async () => {
     if (!selectedBorrow) return;
+
+    const controller = new AbortController();
+    const signal = controller.signal;
 
     try {
       setReturnLoading(true);
-      await returnBook(selectedBorrow.id);
+      await returnBook(selectedBorrow.id, signal);
 
       // Success
       setSuccessMessage(
@@ -150,6 +239,10 @@ const BorrowPage = () => {
       // Reload borrow records
       await refetch();
     } catch (error) {
+      // Ignore abort errors
+      if (error.name === "AbortError") {
+        return;
+      }
       const errorMsg =
         error.response?.data?.detail ||
         "Failed to return book. Please try again.";
@@ -159,12 +252,12 @@ const BorrowPage = () => {
     } finally {
       setReturnLoading(false);
     }
-  };
+  }, [selectedBorrow, refetch]);
 
-  const handleCancelReturn = () => {
+  const handleCancelReturn = useCallback(() => {
     setConfirmDialogOpen(false);
     setSelectedBorrow(null);
-  };
+  }, []);
 
   const actions = [
     {
@@ -202,7 +295,7 @@ const BorrowPage = () => {
                 control={
                   <Checkbox
                     checked={includeReturned}
-                    onChange={(e) => setIncludeReturned(e.target.checked)}
+                    onChange={handleIncludeReturnedChange}
                   />
                 }
                 label="Returned Books"
@@ -256,7 +349,7 @@ const BorrowPage = () => {
               <Button
                 variant="outlined"
                 onClick={clearFilters}
-                disabled={!selectedMemberId && !selectedBookId}
+                disabled={!selectedMemberId && !selectedBookId && includeReturned}
                 size="small"
               >
                 Clear Filters
@@ -274,6 +367,11 @@ const BorrowPage = () => {
             columns={columns}
             rows={borrows}
             actions={actions}
+            totalRecords={totalRecords}
+            onPaginationChange={onPaginationChange}
+            pageSize={pageSize}
+            isServerPagination={true}
+            currentPage={page}
           />
         </PageStateHandler>
 
